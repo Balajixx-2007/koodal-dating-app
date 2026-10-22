@@ -1,12 +1,13 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { 
   User, Profile, RelationshipIntent, Match, Message, Report, 
-  SelfieVerification, PhotoModerationItem 
+  SelfieVerification, PhotoModerationItem, WaitlistEntry, AdmissionBatch 
 } from '../types';
 import { 
   INITIAL_USER, INITIAL_MY_PROFILE, SEED_PROFILES, 
   INITIAL_MATCHES, INITIAL_MESSAGES, INITIAL_REPORTS, 
-  INITIAL_SELFIES, INITIAL_PHOTOS_MODERATION 
+  INITIAL_SELFIES, INITIAL_PHOTOS_MODERATION,
+  INITIAL_WAITLIST_ENTRIES, INITIAL_BATCHES
 } from '../mockData';
 import { Language, translations } from '../translations';
 import confetti from 'canvas-confetti';
@@ -57,6 +58,14 @@ interface AppContextType {
   reviewSelfie: (selfieId: string, approved: boolean) => void;
   reviewPhoto: (photoId: string, approved: boolean) => void;
   toggleUserBan: (userId: string) => void;
+
+  // Waitlist & Ratio Control
+  waitlistEntries: WaitlistEntry[];
+  admissionBatches: AdmissionBatch[];
+  userWaitlistStatus: WaitlistEntry | null;
+  joinWaitlist: (data: { email: string; city: string; gender: 'woman' | 'man' | 'non_binary' | 'other'; intent: RelationshipIntent; referralCode?: string }) => WaitlistEntry;
+  boostWaitlistEntry: (entryId: string, task: 'selfie' | 'profile' | 'referral') => void;
+  runBatchAdmission: (city: string, womenToAdmit: number, menToAdmit: number) => { womenAdmitted: number; menAdmitted: number; newRatio: number };
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -153,6 +162,47 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     { id: 'usr_05', email: 'divya.s@example.com', role: 'member', status: 'active', createdAt: '2026-09-09T00:00:00Z', verifiedAt: '2026-09-10T00:00:00Z' },
     { id: 'usr_suspect_99', email: 'vijay.trade@shady.com', role: 'member', status: 'suspended', createdAt: '2026-10-18T00:00:00Z' }
   ]);
+
+  const [waitlistEntries, setWaitlistEntries] = useState<WaitlistEntry[]>(() => {
+    const saved = localStorage.getItem('koodal_waitlist');
+    return saved ? JSON.parse(saved) : INITIAL_WAITLIST_ENTRIES;
+  });
+
+  const [admissionBatches, setAdmissionBatches] = useState<AdmissionBatch[]>(() => {
+    const saved = localStorage.getItem('koodal_batches');
+    return saved ? JSON.parse(saved) : INITIAL_BATCHES;
+  });
+
+  const [userWaitlistStatus, setUserWaitlistStatus] = useState<WaitlistEntry | null>(() => {
+    const savedId = localStorage.getItem('koodal_my_waitlist_id');
+    if (savedId) {
+      const found = INITIAL_WAITLIST_ENTRIES.find(w => w.id === savedId);
+      if (found) return found;
+    }
+    return {
+      id: 'wl_demo_me',
+      email: 'balaji.waitlist@example.com',
+      city: 'Chennai',
+      gender: 'man',
+      intent: 'long_term',
+      lane: 'men',
+      score: 52,
+      status: 'waiting',
+      referralCount: 0,
+      hasSelfieApproved: false,
+      hasProfileComplete: true,
+      daysOnList: 12,
+      createdAt: '2026-10-10T12:00:00Z'
+    };
+  });
+
+  useEffect(() => {
+    localStorage.setItem('koodal_waitlist', JSON.stringify(waitlistEntries));
+  }, [waitlistEntries]);
+
+  useEffect(() => {
+    localStorage.setItem('koodal_batches', JSON.stringify(admissionBatches));
+  }, [admissionBatches]);
 
   useEffect(() => {
     localStorage.setItem('koodal_lang', language);
@@ -405,6 +455,137 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
   };
 
+  const joinWaitlist = (data: {
+    email: string;
+    city: string;
+    gender: 'woman' | 'man' | 'non_binary' | 'other';
+    intent: RelationshipIntent;
+    referralCode?: string;
+  }): WaitlistEntry => {
+    const isLaunchCity = data.city.toLowerCase().includes('chennai') || data.city.toLowerCase().includes('bangalore');
+    const lane = (data.gender === 'woman' || data.gender === 'non_binary' || data.gender === 'other')
+      ? 'women_and_others'
+      : 'men';
+    
+    // Initial priority score per Section 13:
+    // Email verified (Required), Launch city (+20), Referral (+10), Day 1 (+1)
+    let initialScore = 1;
+    if (isLaunchCity) initialScore += 20;
+    if (data.referralCode) initialScore += 10;
+
+    const newEntry: WaitlistEntry = {
+      id: `wl_${Date.now()}`,
+      email: data.email,
+      city: data.city,
+      gender: data.gender,
+      intent: data.intent,
+      lane,
+      score: initialScore,
+      status: 'waiting',
+      referredBy: data.referralCode ? 'Verified Member' : undefined,
+      referralCount: 0,
+      hasSelfieApproved: false,
+      hasProfileComplete: false,
+      daysOnList: 1,
+      createdAt: new Date().toISOString()
+    };
+
+    setWaitlistEntries(prev => [newEntry, ...prev]);
+    setUserWaitlistStatus(newEntry);
+    localStorage.setItem('koodal_my_waitlist_id', newEntry.id);
+    return newEntry;
+  };
+
+  const boostWaitlistEntry = (entryId: string, task: 'selfie' | 'profile' | 'referral') => {
+    setWaitlistEntries(prev => prev.map(entry => {
+      if (entry.id !== entryId) return entry;
+      let newScore = entry.score;
+      let selfie = entry.hasSelfieApproved;
+      let profile = entry.hasProfileComplete;
+      let refs = entry.referralCount;
+
+      if (task === 'selfie' && !selfie) {
+        selfie = true;
+        newScore += 30;
+      } else if (task === 'profile' && !profile) {
+        profile = true;
+        newScore += 20;
+      } else if (task === 'referral') {
+        refs += 1;
+        newScore += 10;
+      }
+
+      const updated: WaitlistEntry = {
+        ...entry,
+        score: newScore,
+        hasSelfieApproved: selfie,
+        hasProfileComplete: profile,
+        referralCount: refs
+      };
+      if (userWaitlistStatus?.id === entryId) {
+        setUserWaitlistStatus(updated);
+      }
+      return updated;
+    }));
+  };
+
+  const runBatchAdmission = (city: string, womenToAdmit: number, menToAdmit: number) => {
+    const activeWomen = 40;
+    const activeMen = 50;
+    const ratioBefore = Number((activeMen / Math.max(1, activeWomen)).toFixed(2));
+
+    const eligibleWomen = waitlistEntries
+      .filter(w => w.city.toLowerCase().includes(city.toLowerCase()) && w.lane === 'women_and_others' && w.status === 'waiting')
+      .sort((a, b) => b.score - a.score)
+      .slice(0, womenToAdmit);
+
+    const eligibleMen = waitlistEntries
+      .filter(w => w.city.toLowerCase().includes(city.toLowerCase()) && w.lane === 'men' && w.status === 'waiting')
+      .sort((a, b) => b.score - a.score)
+      .slice(0, menToAdmit);
+
+    const admittedIds = new Set([...eligibleWomen.map(w => w.id), ...eligibleMen.map(m => m.id)]);
+
+    setWaitlistEntries(prev => prev.map(w => {
+      if (admittedIds.has(w.id)) {
+        return {
+          ...w,
+          status: 'admitted',
+          admittedAt: new Date().toISOString()
+        };
+      }
+      return w;
+    }));
+
+    const newActiveWomen = activeWomen + eligibleWomen.length;
+    const newActiveMen = activeMen + eligibleMen.length;
+    const ratioAfter = Number((newActiveMen / Math.max(1, newActiveWomen)).toFixed(2));
+
+    const newBatch: AdmissionBatch = {
+      id: `batch_${Date.now()}`,
+      city,
+      date: new Date().toISOString().split('T')[0],
+      womenAdmitted: eligibleWomen.length,
+      menAdmitted: eligibleMen.length,
+      ratioBefore,
+      ratioAfter
+    };
+
+    setAdmissionBatches(prev => [newBatch, ...prev]);
+
+    confetti({
+      particleCount: 100,
+      spread: 80,
+      origin: { y: 0.5 }
+    });
+
+    return {
+      womenAdmitted: eligibleWomen.length,
+      menAdmitted: eligibleMen.length,
+      newRatio: ratioAfter
+    };
+  };
+
   const t = translations[language];
 
   return (
@@ -442,7 +623,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         reviewReport,
         reviewSelfie,
         reviewPhoto,
-        toggleUserBan
+        toggleUserBan,
+        waitlistEntries,
+        admissionBatches,
+        userWaitlistStatus,
+        joinWaitlist,
+        boostWaitlistEntry,
+        runBatchAdmission
       }}
     >
       {children}

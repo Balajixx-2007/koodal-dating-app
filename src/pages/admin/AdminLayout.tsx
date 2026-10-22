@@ -2,12 +2,12 @@ import React from 'react';
 import { useApp } from '../../context/AppContext';
 import { 
   ShieldAlert, Camera, Image, Users, 
-  ArrowLeft, CheckCircle2, AlertTriangle, ShieldCheck, BadgeCheck 
+  ArrowLeft, CheckCircle2, AlertTriangle, ShieldCheck, BadgeCheck, Scale 
 } from 'lucide-react';
 
 interface AdminLayoutProps {
   children: React.ReactNode;
-  activeTab: 'reports' | 'photos' | 'selfies' | 'users';
+  activeTab: 'reports' | 'photos' | 'selfies' | 'users' | 'waitlist';
 }
 
 export const AdminLayout: React.FC<AdminLayoutProps> = ({ children, activeTab }) => {
@@ -17,12 +17,14 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children, activeTab })
     selfieVerifications, 
     photoModerations, 
     allUsers,
+    waitlistEntries,
     activeRole 
   } = useApp();
 
   const pendingReportsCount = reports.filter(r => r.status === 'pending').length;
   const pendingSelfiesCount = selfieVerifications.filter(s => s.status === 'pending').length;
   const pendingPhotosCount = photoModerations.filter(p => p.status === 'pending').length;
+  const waitingWaitlistCount = waitlistEntries.filter(w => w.status === 'waiting').length;
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
@@ -105,6 +107,25 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children, activeTab })
           {pendingPhotosCount > 0 && (
             <span className="px-2 py-0.5 rounded-full bg-[#F20D4E] text-white text-[10px] font-bold">
               {pendingPhotosCount}
+            </span>
+          )}
+        </button>
+
+        <button
+          role="tab"
+          aria-selected={activeTab === 'waitlist'}
+          onClick={() => navigateTo('/admin/waitlist')}
+          className={`pb-3 px-1 flex items-center gap-2 whitespace-nowrap border-b-2 transition-all ${
+            activeTab === 'waitlist'
+              ? 'border-blue-600 text-blue-600 dark:text-blue-400 font-bold'
+              : 'border-transparent text-[#667085] hover:text-[#15182B] dark:hover:text-white'
+          }`}
+        >
+          <Scale className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+          <span>Ratio & Waitlist</span>
+          {waitingWaitlistCount > 0 && (
+            <span className="px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 text-[10px] font-bold">
+              {waitingWaitlistCount}
             </span>
           )}
         </button>

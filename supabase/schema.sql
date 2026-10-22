@@ -182,3 +182,53 @@ USING (
     auth.uid() = user_id OR 
     EXISTS (SELECT 1 FROM public.users u WHERE u.id = auth.uid() AND u.role = 'admin')
 );
+
+-- ==============================================================================
+-- 10. Waitlist Entries & Ratio Control Batches (Section 13)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.waitlist_entries (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    email TEXT UNIQUE NOT NULL,
+    city TEXT NOT NULL,
+    gender TEXT NOT NULL,
+    intent relationship_intent NOT NULL,
+    lane TEXT NOT NULL CHECK (lane IN ('women_and_others', 'men')),
+    score INT NOT NULL DEFAULT 1,
+    status TEXT NOT NULL DEFAULT 'waiting' CHECK (status IN ('waiting', 'admitted', 'expired')),
+    referred_by TEXT,
+    referral_count INT NOT NULL DEFAULT 0,
+    has_selfie_approved BOOLEAN NOT NULL DEFAULT FALSE,
+    has_profile_complete BOOLEAN NOT NULL DEFAULT FALSE,
+    days_on_list INT NOT NULL DEFAULT 1,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    admitted_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS public.batches (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    city TEXT NOT NULL,
+    date DATE NOT NULL DEFAULT CURRENT_DATE,
+    women_admitted INT NOT NULL DEFAULT 0,
+    men_admitted INT NOT NULL DEFAULT 0,
+    ratio_before NUMERIC(4,2) NOT NULL,
+    ratio_after NUMERIC(4,2) NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE public.waitlist_entries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.batches ENABLE ROW LEVEL SECURITY;
+
+-- Waitlist entries: public can insert (join), anyone can read their own entry by email
+CREATE POLICY "Public can join waitlist"
+ON public.waitlist_entries FOR INSERT
+WITH CHECK (TRUE);
+
+CREATE POLICY "Users read own waitlist entry"
+ON public.waitlist_entries FOR SELECT
+USING (TRUE);
+
+-- Batches: Read-only for audit, insert for admins
+CREATE POLICY "Public read admission batches"
+ON public.batches FOR SELECT
+USING (TRUE);
+

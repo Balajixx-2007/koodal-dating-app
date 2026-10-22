@@ -1,4 +1,4 @@
-import { Profile, Match, Message, Report, SelfieVerification, PhotoModerationItem, User } from './types';
+import { Profile, Match, Message, Report, SelfieVerification, PhotoModerationItem, User, WaitlistEntry, AdmissionBatch } from './types';
 
 export const INITIAL_USER: User = {
   id: 'usr_me_01',
@@ -367,3 +367,167 @@ export const INITIAL_PHOTOS_MODERATION: PhotoModerationItem[] = [
     status: 'pending'
   }
 ];
+
+export const INITIAL_WAITLIST_ENTRIES: WaitlistEntry[] = [
+  // Lane 1: Women & Other Genders
+  {
+    id: 'wl_w_01',
+    email: 'kavitha.m@chennai.edu',
+    city: 'Chennai',
+    gender: 'woman',
+    intent: 'long_term',
+    lane: 'women_and_others',
+    score: 82, // 30 (selfie) + 20 (profile) + 20 (city) + 12 (days)
+    status: 'waiting',
+    referralCount: 1,
+    hasSelfieApproved: true,
+    hasProfileComplete: true,
+    daysOnList: 12,
+    createdAt: '2026-10-10T08:00:00Z'
+  },
+  {
+    id: 'wl_w_02',
+    email: 'sneha.blore@biotech.org',
+    city: 'Bangalore',
+    gender: 'woman',
+    intent: 'marriage',
+    lane: 'women_and_others',
+    score: 75, // 30 (selfie) + 20 (profile) + 20 (city) + 5 (days)
+    status: 'waiting',
+    referralCount: 0,
+    hasSelfieApproved: true,
+    hasProfileComplete: true,
+    daysOnList: 5,
+    createdAt: '2026-10-17T09:30:00Z'
+  },
+  {
+    id: 'wl_w_03',
+    email: 'dhivya.ux@chennai.design',
+    city: 'Chennai',
+    gender: 'non_binary',
+    intent: 'friendship',
+    lane: 'women_and_others',
+    score: 68, // 30 (selfie) + 20 (city) + 18 (days)
+    status: 'waiting',
+    referralCount: 0,
+    hasSelfieApproved: true,
+    hasProfileComplete: false,
+    daysOnList: 18,
+    createdAt: '2026-10-04T14:20:00Z'
+  },
+  {
+    id: 'wl_w_04',
+    email: 'meera.s@health.in',
+    city: 'Chennai',
+    gender: 'woman',
+    intent: 'casual',
+    lane: 'women_and_others',
+    score: 44, // 20 (profile) + 20 (city) + 4 (days)
+    status: 'waiting',
+    referralCount: 0,
+    hasSelfieApproved: false,
+    hasProfileComplete: true,
+    daysOnList: 4,
+    createdAt: '2026-10-18T16:00:00Z'
+  },
+
+  // Lane 2: Men
+  {
+    id: 'wl_m_01',
+    email: 'aravind.subramanian@gmail.com',
+    city: 'Chennai',
+    gender: 'man',
+    intent: 'long_term',
+    lane: 'men',
+    score: 86, // 30 (selfie) + 20 (profile) + 20 (city) + 10 (referral) + 6 (days)
+    status: 'waiting',
+    referredBy: 'Balaji K.',
+    referralCount: 1,
+    hasSelfieApproved: true,
+    hasProfileComplete: true,
+    daysOnList: 6,
+    createdAt: '2026-10-16T11:00:00Z'
+  },
+  {
+    id: 'wl_m_02',
+    email: 'karthik.b@techlabs.io',
+    city: 'Bangalore',
+    gender: 'man',
+    intent: 'casual',
+    lane: 'men',
+    score: 84, // 30 (selfie) + 20 (profile) + 20 (city) + 14 (days)
+    status: 'waiting',
+    referralCount: 0,
+    hasSelfieApproved: true,
+    hasProfileComplete: true,
+    daysOnList: 14,
+    createdAt: '2026-10-08T10:15:00Z'
+  },
+  {
+    id: 'wl_m_03',
+    email: 'vignesh.r@iitm.ac.in',
+    city: 'Chennai',
+    gender: 'man',
+    intent: 'marriage',
+    lane: 'men',
+    score: 72, // 30 (selfie) + 20 (city) + 20 (days limit) + 2
+    status: 'waiting',
+    referralCount: 0,
+    hasSelfieApproved: true,
+    hasProfileComplete: false,
+    daysOnList: 22,
+    createdAt: '2026-09-30T17:45:00Z'
+  },
+  {
+    id: 'wl_m_04',
+    email: 'siddharth.m@startup.co',
+    city: 'Bangalore',
+    gender: 'man',
+    intent: 'friendship',
+    lane: 'men',
+    score: 43, // 20 (city) + 20 (profile) + 3 (days)
+    status: 'waiting',
+    referralCount: 0,
+    hasSelfieApproved: false,
+    hasProfileComplete: true,
+    daysOnList: 3,
+    createdAt: '2026-10-19T13:20:00Z'
+  },
+  {
+    id: 'wl_m_05',
+    email: 'pradeep.kumar@chennai.co',
+    city: 'Chennai',
+    gender: 'man',
+    intent: 'long_term',
+    lane: 'men',
+    score: 28, // 20 (city) + 8 (days)
+    status: 'waiting',
+    referralCount: 0,
+    hasSelfieApproved: false,
+    hasProfileComplete: false,
+    daysOnList: 8,
+    createdAt: '2026-10-14T09:00:00Z'
+  }
+];
+
+export const INITIAL_BATCHES: AdmissionBatch[] = [
+  {
+    id: 'batch_01',
+    city: 'Chennai',
+    date: '2026-10-15',
+    womenAdmitted: 15,
+    menAdmitted: 18,
+    ratioBefore: 1.45,
+    ratioAfter: 1.25
+  },
+  {
+    id: 'batch_02',
+    city: 'Bangalore',
+    date: '2026-10-18',
+    womenAdmitted: 12,
+    menAdmitted: 14,
+    ratioBefore: 1.38,
+    ratioAfter: 1.18
+  }
+];
+

@@ -16,12 +16,15 @@ import { MyProfile } from './pages/MyProfile';
 import { Settings } from './pages/Settings';
 import { Safety } from './pages/Safety';
 import { Legal } from './pages/Legal';
+import { Waitlist } from './pages/Waitlist';
+import { WaitlistStatus } from './pages/WaitlistStatus';
 
 // Admin Pages
 import { AdminReports } from './pages/admin/AdminReports';
 import { AdminPhotos } from './pages/admin/AdminPhotos';
 import { AdminSelfies } from './pages/admin/AdminSelfies';
 import { AdminUsers } from './pages/admin/AdminUsers';
+import { AdminWaitlist } from './pages/admin/AdminWaitlist';
 
 export const MainContent: React.FC = () => {
   const { currentView } = useApp();
@@ -30,6 +33,10 @@ export const MainContent: React.FC = () => {
     switch (currentView) {
       case '/':
         return <Home />;
+      case '/waitlist':
+        return <Waitlist />;
+      case '/waitlist/status':
+        return <WaitlistStatus />;
       case '/signup':
         return <Auth isSignUp={true} />;
       case '/login':
@@ -60,6 +67,8 @@ export const MainContent: React.FC = () => {
         return <AdminSelfies />;
       case '/admin/users':
         return <AdminUsers />;
+      case '/admin/waitlist':
+        return <AdminWaitlist />;
       default:
         if (currentView.startsWith('/profile/')) {
           return <ProfileDetail />;

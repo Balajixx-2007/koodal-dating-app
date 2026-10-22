@@ -45,17 +45,23 @@ export const Home: React.FC = () => {
         {/* Primary and Secondary CTA */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3.5 pt-3">
           <button
-            onClick={() => navigateTo('/signup')}
-            className="w-full sm:w-auto px-8 py-3.5 btn-primary-rose text-base flex items-center justify-center gap-2"
+            onClick={() => navigateTo('/waitlist')}
+            className="w-full sm:w-auto px-8 py-3.5 btn-primary-rose text-base flex items-center justify-center gap-2 shadow-lg"
           >
-            <span>{t.cta_start}</span>
+            <span>Join Launch Waitlist</span>
             <ArrowRight className="w-4 h-4" />
           </button>
           <button
             onClick={() => navigateTo('/discover')}
             className="w-full sm:w-auto px-7 py-3.5 btn-secondary-surface text-sm flex items-center justify-center gap-2"
           >
-            <span>Explore Verified Profiles</span>
+            <span>Explore Demo Profiles</span>
+          </button>
+          <button
+            onClick={() => navigateTo('/waitlist/status')}
+            className="w-full sm:w-auto px-4 py-3.5 text-xs text-[#667085] hover:text-[#15182B] dark:hover:text-white font-semibold transition-colors"
+          >
+            Check Queue Status
           </button>
         </div>
 

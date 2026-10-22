@@ -113,3 +113,32 @@ export interface PhotoModerationItem {
   submittedAt: string;
   status: 'pending' | 'approved' | 'rejected';
 }
+
+export interface WaitlistEntry {
+  id: string;
+  email: string;
+  city: 'Chennai' | 'Bangalore' | string;
+  gender: 'woman' | 'man' | 'non_binary' | 'other';
+  intent: RelationshipIntent;
+  lane: 'women_and_others' | 'men';
+  score: number;
+  status: 'waiting' | 'admitted' | 'expired';
+  referredBy?: string;
+  referralCount: number;
+  hasSelfieApproved: boolean;
+  hasProfileComplete: boolean;
+  daysOnList: number;
+  createdAt: string;
+  admittedAt?: string;
+}
+
+export interface AdmissionBatch {
+  id: string;
+  city: string;
+  date: string;
+  womenAdmitted: number;
+  menAdmitted: number;
+  ratioBefore: number;
+  ratioAfter: number;
+}
+
