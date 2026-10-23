@@ -40,10 +40,16 @@ jobs:
 
       - name: Run Supabase pgTAP database tests
         run: |
-          echo "=== 1. Supabase CLI test db ==="
-          supabase test db 2>&1 | tee pg_tap_summary.txt
-          echo "=== 2. pg_prove Verbose TAP Stream (1..N) ==="
-          docker run --network host -e PGPASSWORD=postgres -v ${{ github.workspace }}/supabase/tests:/tests public.ecr.aws/supabase/pg_prove:3.36 -v -h 127.0.0.1 -p 54322 -U postgres -d postgres /tests/database_security_and_admissions.sql 2>&1 | tee pg_tap_output.txt
+          echo "=== 1. Raw TAP Stream (1..N) ==="
+          docker exec -i $(docker ps --filter "name=supabase_db_" --format "{{.ID}}") psql -U postgres -d postgres -X -q -t -A < supabase/tests/database_security_and_admissions.sql > tap_stream.txt
+          cat tap_stream.txt
+
+          echo "=== 2. Supabase CLI test db ==="
+          supabase test db 2>&1 | tee cli_summary.txt
+
+          cat tap_stream.txt > pg_tap_output.txt
+          echo "" >> pg_tap_output.txt
+          cat cli_summary.txt >> pg_tap_output.txt
 
       - name: Run Vitest database & formula tests
         run: npm test
