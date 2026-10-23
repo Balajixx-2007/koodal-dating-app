@@ -37,6 +37,7 @@ PREPARE test_audit_delete AS
 SELECT throws_ok(
     'test_audit_delete',
     'P0001',
+    'Security Policy Violation: audit_log is strictly append-only. UPDATE, DELETE, and TRUNCATE are prohibited.',
     'Audit log prohibits DELETE operation'
 );
 
@@ -45,6 +46,7 @@ PREPARE test_audit_update AS
 SELECT throws_ok(
     'test_audit_update',
     'P0001',
+    'Security Policy Violation: audit_log is strictly append-only. UPDATE, DELETE, and TRUNCATE are prohibited.',
     'Audit log prohibits UPDATE operation'
 );
 
@@ -126,6 +128,7 @@ PREPARE test_insert_foreign_email AS
 SELECT throws_ok(
     'test_insert_foreign_email',
     'P0001',
+    'Security Policy Violation: You can only register your own authenticated email.',
     'Member inserting another person''s email must fail'
 );
 
@@ -139,6 +142,7 @@ PREPARE test_insert_foreign_user_id AS
 SELECT throws_ok(
     'test_insert_foreign_user_id',
     'P0001',
+    'Security Policy Violation: You can only register your own authenticated user id.',
     'Member inserting another person''s user_id must fail'
 );
 
@@ -162,6 +166,7 @@ PREPARE test_insert_unconfirmed_email AS
 SELECT throws_ok(
     'test_insert_unconfirmed_email',
     '42501',
+    'new row violates row-level security policy for table "waitlist_entries"',
     'Member with unconfirmed email must fail'
 );
 
