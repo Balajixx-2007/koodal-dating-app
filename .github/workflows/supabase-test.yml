@@ -5,6 +5,9 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: write
+
 jobs:
   database-tests:
     name: Supabase Start & Database pgTAP Tests
@@ -34,18 +37,23 @@ jobs:
       - name: Start Supabase local instance
         run: |
           supabase start 2>&1 | tee supabase_start.log
-          echo "### Supabase Start Output" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          cat supabase_start.log >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
 
       - name: Run Supabase pgTAP database tests
         run: |
           supabase test db 2>&1 | tee supabase_test.log
-          echo "### Supabase Test DB Output" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          cat supabase_test.log >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
 
       - name: Run Vitest database & formula tests
         run: npm test
+
+      - name: Commit CI log output
+        if: always()
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -B ci-logs
+          mkdir -p ci-artifacts
+          cp supabase_start.log ci-artifacts/supabase_start.txt || true
+          cp supabase_test.log ci-artifacts/supabase_test.txt || true
+          git add ci-artifacts/
+          git commit -m "ci: record raw supabase start and test db execution logs [skip ci]" || true
+          git push origin ci-logs --force
