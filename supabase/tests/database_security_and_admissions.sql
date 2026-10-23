@@ -44,14 +44,19 @@ SELECT throws_ok(
 -- ------------------------------------------------------------------------------
 -- Test 2: Member A Cannot Tamper with Lane, Status, or Score on Update
 -- ------------------------------------------------------------------------------
+-- Ensure mock user exists in auth.users with confirmed email
+INSERT INTO auth.users (id, email, email_confirmed_at)
+VALUES ('a0000000-0000-0000-0000-000000000001', 'member_a@example.com', NOW())
+ON CONFLICT (id) DO NOTHING;
+
 -- Simulate non-admin session
 SET LOCAL ROLE authenticated;
 SET LOCAL "request.jwt.claim.sub" TO 'a0000000-0000-0000-0000-000000000001';
 SET LOCAL "request.jwt.claim.email" TO 'member_a@example.com';
 
 -- Insert entry as member A
-INSERT INTO public.waitlist_entries (email, city, gender, intent)
-VALUES ('member_a@example.com', 'Chennai', 'man', 'long_term');
+INSERT INTO public.waitlist_entries (user_id, email, city, gender, intent)
+VALUES ('a0000000-0000-0000-0000-000000000001', 'member_a@example.com', 'Chennai', 'man', 'long_term');
 
 -- Attempt to tamper with status and score
 UPDATE public.waitlist_entries
@@ -83,8 +88,12 @@ SELECT ok(
 -- ------------------------------------------------------------------------------
 RESET ROLE;
 -- Insert entry for Member B
-INSERT INTO public.waitlist_entries (email, city, gender, intent)
-VALUES ('member_b@example.com', 'Bangalore', 'woman', 'marriage');
+INSERT INTO auth.users (id, email, email_confirmed_at)
+VALUES ('b0000000-0000-0000-0000-000000000002', 'member_b@example.com', NOW())
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.waitlist_entries (user_id, email, city, gender, intent)
+VALUES ('b0000000-0000-0000-0000-000000000002', 'member_b@example.com', 'Bangalore', 'woman', 'marriage');
 
 -- Switch back to Member A session
 SET LOCAL ROLE authenticated;
@@ -110,15 +119,33 @@ SELECT throws_ok(
 );
 
 -- ------------------------------------------------------------------------------
--- Test 5: Member with unconfirmed email must fail
+-- Test 5: Member inserting another person's user_id must fail
 -- ------------------------------------------------------------------------------
+PREPARE test_insert_foreign_user_id AS
+    INSERT INTO public.waitlist_entries (user_id, email, city, gender, intent)
+    VALUES ('f0000000-0000-0000-0000-000000000009', 'member_a@example.com', 'Chennai', 'man', 'long_term');
+
+SELECT throws_ok(
+    'test_insert_foreign_user_id',
+    'Member inserting another person''s user_id must fail'
+);
+
+-- ------------------------------------------------------------------------------
+-- Test 6: Member with unconfirmed email must fail
+-- ------------------------------------------------------------------------------
+RESET ROLE;
+INSERT INTO auth.users (id, email, email_confirmed_at)
+VALUES ('d0000000-0000-0000-0000-000000000002', 'unconfirmed@example.com', NULL)
+ON CONFLICT (id) DO NOTHING;
+
 -- Switch to unconfirmed user session
-SET LOCAL "request.jwt.claim.sub" TO 'u0000000-0000-0000-0000-000000000002';
+SET LOCAL ROLE authenticated;
+SET LOCAL "request.jwt.claim.sub" TO 'd0000000-0000-0000-0000-000000000002';
 SET LOCAL "request.jwt.claim.email" TO 'unconfirmed@example.com';
 
 PREPARE test_insert_unconfirmed_email AS
     INSERT INTO public.waitlist_entries (user_id, email, city, gender, intent)
-    VALUES ('u0000000-0000-0000-0000-000000000002', 'unconfirmed@example.com', 'Chennai', 'man', 'long_term');
+    VALUES ('d0000000-0000-0000-0000-000000000002', 'unconfirmed@example.com', 'Chennai', 'man', 'long_term');
 
 SELECT throws_ok(
     'test_insert_unconfirmed_email',
@@ -126,7 +153,28 @@ SELECT throws_ok(
 );
 
 -- ------------------------------------------------------------------------------
--- Test 6: Section 13 Formula Verification in SQL
+-- Test 7: Member with confirmed email inserting own credentials must succeed
+-- ------------------------------------------------------------------------------
+RESET ROLE;
+INSERT INTO auth.users (id, email, email_confirmed_at)
+VALUES ('d0000000-0000-0000-0000-000000000003', 'member_c@example.com', NOW())
+ON CONFLICT (id) DO NOTHING;
+
+SET LOCAL ROLE authenticated;
+SET LOCAL "request.jwt.claim.sub" TO 'd0000000-0000-0000-0000-000000000003';
+SET LOCAL "request.jwt.claim.email" TO 'member_c@example.com';
+
+PREPARE test_insert_valid_entry AS
+    INSERT INTO public.waitlist_entries (user_id, email, city, gender, intent)
+    VALUES ('d0000000-0000-0000-0000-000000000003', 'member_c@example.com', 'Bangalore', 'woman', 'long_term');
+
+SELECT lives_ok(
+    'test_insert_valid_entry',
+    'Member with confirmed email and own credentials inserts successfully'
+);
+
+-- ------------------------------------------------------------------------------
+-- Test 8: Section 13 Formula Verification in SQL
 -- ------------------------------------------------------------------------------
 RESET ROLE;
 

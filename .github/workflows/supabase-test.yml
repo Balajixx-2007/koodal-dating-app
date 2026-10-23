@@ -5,6 +5,9 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: write
+
 jobs:
   database-tests:
     name: Supabase Start & Database pgTAP Tests
@@ -33,20 +36,23 @@ jobs:
 
       - name: Start Supabase local instance
         run: |
-          supabase start 2>&1 | tee supabase_start.log
+          supabase start
 
       - name: Run Supabase pgTAP database tests
         run: |
-          supabase test db 2>&1 | tee supabase_test.log
+          supabase test db supabase/tests/database_security_and_admissions.sql 2>&1 | tee pg_tap_output.txt
 
       - name: Run Vitest database & formula tests
         run: npm test
 
-      - name: Upload Supabase execution logs
+      - name: Publish execution logs to repository
         if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: supabase-execution-logs
-          path: |
-            supabase_start.log
-            supabase_test.log
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -B ci-logs
+          mkdir -p ci-artifacts
+          cp pg_tap_output.txt ci-artifacts/pg_tap_output.txt || true
+          git add ci-artifacts/
+          git commit -m "ci: publish latest pgTAP test results [skip ci]" || true
+          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git HEAD:refs/heads/ci-logs --force
