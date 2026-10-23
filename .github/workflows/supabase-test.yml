@@ -5,9 +5,6 @@ on:
   push:
     branches: [main]
 
-permissions:
-  contents: write
-
 jobs:
   database-tests:
     name: Supabase Start & Database pgTAP Tests
@@ -45,15 +42,11 @@ jobs:
       - name: Run Vitest database & formula tests
         run: npm test
 
-      - name: Commit CI log output
+      - name: Upload Supabase execution logs
         if: always()
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git checkout -B ci-logs
-          mkdir -p ci-artifacts
-          cp supabase_start.log ci-artifacts/supabase_start.txt || true
-          cp supabase_test.log ci-artifacts/supabase_test.txt || true
-          git add ci-artifacts/
-          git commit -m "ci: record raw supabase start and test db execution logs [skip ci]" || true
-          git push origin ci-logs --force
+        uses: actions/upload-artifact@v4
+        with:
+          name: supabase-execution-logs
+          path: |
+            supabase_start.log
+            supabase_test.log
