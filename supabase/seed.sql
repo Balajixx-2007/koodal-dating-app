@@ -15,10 +15,10 @@ INSERT INTO public.waitlist_entries (
     has_selfie_approved, has_profile_complete, days_on_list, created_at
 )
 VALUES
-    ('w0000000-0000-0000-0000-000000000001', 'kavitha.m@chennai.edu', 'Chennai', 'woman', 'long_term', 'women_and_others', 82, 'waiting', 1, true, true, 12, '2026-10-10T08:00:00Z'),
-    ('w0000000-0000-0000-0000-000000000002', 'sneha.blore@biotech.org', 'Bangalore', 'woman', 'marriage', 'women_and_others', 75, 'waiting', 0, true, true, 5, '2026-10-17T09:30:00Z'),
-    ('w0000000-0000-0000-0000-000000000003', 'dhivya.ux@chennai.design', 'Chennai', 'non_binary', 'friendship', 'women_and_others', 68, 'waiting', 0, true, false, 18, '2026-10-04T14:20:00Z'),
-    ('w0000000-0000-0000-0000-000000000004', 'aravind.subramanian@gmail.com', 'Chennai', 'man', 'long_term', 'men', 86, 'waiting', 1, true, true, 6, '2026-10-16T11:00:00Z'),
-    ('w0000000-0000-0000-0000-000000000005', 'karthik.b@techlabs.io', 'Bangalore', 'man', 'casual', 'men', 84, 'waiting', 0, true, true, 14, '2026-10-08T10:15:00Z'),
-    ('w0000000-0000-0000-0000-000000000006', 'vignesh.r@iitm.ac.in', 'Chennai', 'man', 'marriage', 'men', 72, 'waiting', 0, true, false, 22, '2026-09-30T17:45:00Z')
+    ('c0000000-0000-0000-0000-000000000001', 'kavitha.m@chennai.edu', 'Chennai', 'woman', 'long_term', 'women_and_others', 82, 'waiting', 1, true, true, 12, '2026-10-10T08:00:00Z'),
+    ('c0000000-0000-0000-0000-000000000002', 'sneha.blore@biotech.org', 'Bangalore', 'woman', 'marriage', 'women_and_others', 75, 'waiting', 0, true, true, 5, '2026-10-17T09:30:00Z'),
+    ('c0000000-0000-0000-0000-000000000003', 'dhivya.ux@chennai.design', 'Chennai', 'non_binary', 'friendship', 'women_and_others', 68, 'waiting', 0, true, false, 18, '2026-10-04T14:20:00Z'),
+    ('c0000000-0000-0000-0000-000000000004', 'aravind.subramanian@gmail.com', 'Chennai', 'man', 'long_term', 'men', 86, 'waiting', 1, true, true, 6, '2026-10-16T11:00:00Z'),
+    ('c0000000-0000-0000-0000-000000000005', 'karthik.b@techlabs.io', 'Bangalore', 'man', 'casual', 'men', 84, 'waiting', 0, true, true, 14, '2026-10-08T10:15:00Z'),
+    ('c0000000-0000-0000-0000-000000000006', 'vignesh.r@iitm.ac.in', 'Chennai', 'man', 'marriage', 'men', 72, 'waiting', 0, true, false, 22, '2026-09-30T17:45:00Z')
 ON CONFLICT (id) DO NOTHING;
