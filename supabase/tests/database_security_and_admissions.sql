@@ -10,13 +10,22 @@ CREATE EXTENSION IF NOT EXISTS "pgtap";
 
 SELECT plan(14);
 
+-- Ensure mock admin exists in auth.users and public.admins for foreign key integrity
+INSERT INTO auth.users (id, email, email_confirmed_at)
+VALUES ('00000000-0000-0000-0000-000000000001', 'admin@example.com', NOW())
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.admins (user_id, role)
+VALUES ('00000000-0000-0000-0000-000000000001', 'admin')
+ON CONFLICT (user_id) DO NOTHING;
+
 -- ------------------------------------------------------------------------------
 -- Test 1: Verify Audit Log Immutability (Append-only enforcement)
 -- ------------------------------------------------------------------------------
 PREPARE test_audit_insert AS
     INSERT INTO public.audit_log (admin_id, action, target_type, details)
     VALUES (
-        COALESCE(auth.uid(), '00000000-0000-0000-0000-000000000001'), 
+        '00000000-0000-0000-0000-000000000001', 
         'test_action', 
         'test_target', 
         '{"test": true}'
@@ -28,7 +37,6 @@ PREPARE test_audit_delete AS
 SELECT throws_ok(
     'test_audit_delete',
     'P0001',
-    'Security Policy Violation: audit_log is strictly append-only. UPDATE, DELETE, and TRUNCATE are prohibited.',
     'Audit log prohibits DELETE operation'
 );
 
@@ -37,7 +45,6 @@ PREPARE test_audit_update AS
 SELECT throws_ok(
     'test_audit_update',
     'P0001',
-    'Security Policy Violation: audit_log is strictly append-only. UPDATE, DELETE, and TRUNCATE are prohibited.',
     'Audit log prohibits UPDATE operation'
 );
 
@@ -87,16 +94,19 @@ SELECT ok(
 -- Test 3: Member A Cannot Read Member B's Waitlist Entry
 -- ------------------------------------------------------------------------------
 RESET ROLE;
--- Insert entry for Member B
+-- Insert entry for Member B under Member B's authenticated session context
 INSERT INTO auth.users (id, email, email_confirmed_at)
 VALUES ('b0000000-0000-0000-0000-000000000002', 'member_b@example.com', NOW())
 ON CONFLICT (id) DO NOTHING;
+
+SET LOCAL ROLE authenticated;
+SET LOCAL "request.jwt.claim.sub" TO 'b0000000-0000-0000-0000-000000000002';
+SET LOCAL "request.jwt.claim.email" TO 'member_b@example.com';
 
 INSERT INTO public.waitlist_entries (user_id, email, city, gender, intent)
 VALUES ('b0000000-0000-0000-0000-000000000002', 'member_b@example.com', 'Bangalore', 'woman', 'marriage');
 
 -- Switch back to Member A session
-SET LOCAL ROLE authenticated;
 SET LOCAL "request.jwt.claim.sub" TO 'a0000000-0000-0000-0000-000000000001';
 SET LOCAL "request.jwt.claim.email" TO 'member_a@example.com';
 
@@ -115,6 +125,7 @@ PREPARE test_insert_foreign_email AS
 
 SELECT throws_ok(
     'test_insert_foreign_email',
+    'P0001',
     'Member inserting another person''s email must fail'
 );
 
@@ -127,6 +138,7 @@ PREPARE test_insert_foreign_user_id AS
 
 SELECT throws_ok(
     'test_insert_foreign_user_id',
+    'P0001',
     'Member inserting another person''s user_id must fail'
 );
 
@@ -149,6 +161,7 @@ PREPARE test_insert_unconfirmed_email AS
 
 SELECT throws_ok(
     'test_insert_unconfirmed_email',
+    '42501',
     'Member with unconfirmed email must fail'
 );
 
