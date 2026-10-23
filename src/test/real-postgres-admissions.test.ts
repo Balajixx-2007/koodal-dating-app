@@ -51,6 +51,7 @@ describe('Item 2 & 3: Real Database Test Suite (In-Memory PostgreSQL Engine)', (
 
       CREATE TABLE IF NOT EXISTS public.waitlist_entries (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID,
         email TEXT UNIQUE NOT NULL,
         city TEXT NOT NULL,
         gender TEXT NOT NULL,
@@ -76,6 +77,111 @@ describe('Item 2 & 3: Real Database Test Suite (In-Memory PostgreSQL Engine)', (
         ratio_before NUMERIC(4,2) NOT NULL,
         ratio_after NUMERIC(4,2) NOT NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      -- Auth schema setup for testing
+      CREATE SCHEMA IF NOT EXISTS auth;
+      CREATE TABLE IF NOT EXISTS auth.users (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        email TEXT UNIQUE NOT NULL,
+        email_confirmed_at TIMESTAMPTZ
+      );
+
+      CREATE OR REPLACE FUNCTION auth.uid() RETURNS UUID AS $$
+        SELECT NULLIF(current_setting('request.jwt.claim.sub', true), '')::UUID;
+      $$ LANGUAGE sql STABLE;
+
+      CREATE OR REPLACE FUNCTION auth.email() RETURNS TEXT AS $$
+        SELECT NULLIF(current_setting('request.jwt.claim.email', true), '');
+      $$ LANGUAGE sql STABLE;
+
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+          CREATE ROLE authenticated;
+        END IF;
+      END $$;
+
+      GRANT ALL ON SCHEMA public TO authenticated;
+      GRANT ALL ON ALL TABLES IN SCHEMA public TO authenticated;
+      GRANT ALL ON SCHEMA auth TO authenticated;
+      GRANT ALL ON ALL TABLES IN SCHEMA auth TO authenticated;
+
+      -- SECURITY DEFINER email confirmation check
+      CREATE OR REPLACE FUNCTION public.is_caller_email_confirmed()
+      RETURNS BOOLEAN
+      LANGUAGE plpgsql
+      SECURITY DEFINER
+      SET search_path = public, pg_temp
+      AS $$
+      DECLARE
+          v_confirmed_at TIMESTAMPTZ;
+      BEGIN
+          IF auth.uid() IS NULL THEN
+              RETURN FALSE;
+          END IF;
+
+          SELECT email_confirmed_at INTO v_confirmed_at
+          FROM auth.users
+          WHERE id = auth.uid();
+
+          RETURN (v_confirmed_at IS NOT NULL);
+      END;
+      $$;
+
+      GRANT EXECUTE ON FUNCTION public.is_caller_email_confirmed() TO authenticated;
+
+      -- Trigger to enforce user_id, email, and defaults
+      CREATE OR REPLACE FUNCTION public.derive_and_secure_waitlist_entry()
+      RETURNS TRIGGER
+      LANGUAGE plpgsql
+      SECURITY DEFINER
+      SET search_path = public, auth, pg_temp
+      AS $$
+      BEGIN
+          IF TG_OP = 'INSERT' THEN
+              IF auth.uid() IS NOT NULL THEN
+                  IF NEW.email IS NOT NULL AND NEW.email <> auth.email() THEN
+                      RAISE EXCEPTION 'Security Policy Violation: You can only register your own authenticated email.';
+                  END IF;
+                  IF NEW.user_id IS NOT NULL AND NEW.user_id <> auth.uid() THEN
+                      RAISE EXCEPTION 'Security Policy Violation: You can only register your own authenticated user id.';
+                  END IF;
+                  NEW.user_id := auth.uid();
+                  NEW.email := auth.email();
+              END IF;
+
+              NEW.status := 'waiting';
+              NEW.admitted_at := NULL;
+              NEW.created_at := COALESCE(NEW.created_at, NOW());
+              NEW.days_on_list := 1;
+
+              IF LOWER(NEW.gender) IN ('woman', 'female', 'non_binary', 'other') THEN
+                  NEW.lane := 'women_and_others';
+              ELSE
+                  NEW.lane := 'men';
+              END IF;
+          END IF;
+          RETURN NEW;
+      END;
+      $$;
+
+      DROP TRIGGER IF EXISTS tr_derive_waitlist_entry_insert ON public.waitlist_entries;
+      CREATE TRIGGER tr_derive_waitlist_entry_insert
+      BEFORE INSERT ON public.waitlist_entries
+      FOR EACH ROW EXECUTE FUNCTION public.derive_and_secure_waitlist_entry();
+
+      -- RLS and policy
+      ALTER TABLE public.waitlist_entries ENABLE ROW LEVEL SECURITY;
+
+      DROP POLICY IF EXISTS "waitlist_insert_authenticated" ON public.waitlist_entries;
+      CREATE POLICY "waitlist_insert_authenticated"
+      ON public.waitlist_entries FOR INSERT
+      TO authenticated
+      WITH CHECK (
+          status = 'waiting'
+          AND user_id = auth.uid()
+          AND email = auth.email()
+          AND public.is_caller_email_confirmed()
       );
     `);
 
@@ -273,7 +379,7 @@ describe('Item 2 & 3: Real Database Test Suite (In-Memory PostgreSQL Engine)', (
       END;
       $$;
     `);
-  }, 60000);
+  }, 180000);
 
   // ----------------------------------------------------------------------------
   // Item 2: Real Database execution for 8 cases vs TypeScript Formula
@@ -364,5 +470,69 @@ describe('Item 2 & 3: Real Database Test Suite (In-Memory PostgreSQL Engine)', (
     expect(afterApproval.rows[0].has_selfie_approved).toBe(true);
     // Score was 21, now 21 + 30 = 51!
     expect(afterApproval.rows[0].score).toBe(51);
+  });
+
+  // ----------------------------------------------------------------------------
+  // Item 3: Policy & Trigger Tests for Waitlist Insert
+  // ----------------------------------------------------------------------------
+  it('Item 3: A member inserting an entry with another persons email must fail; a member with unconfirmed email must fail', async () => {
+    const confirmedUserId = '11111111-1111-1111-1111-111111111111';
+    const confirmedEmail = 'member.confirmed@example.com';
+    const unconfirmedUserId = '22222222-2222-2222-2222-222222222222';
+    const unconfirmedEmail = 'member.unconfirmed@example.com';
+
+    // Seed users in auth.users
+    await db.exec(`
+      INSERT INTO auth.users (id, email, email_confirmed_at)
+      VALUES 
+        ('${confirmedUserId}', '${confirmedEmail}', NOW()),
+        ('${unconfirmedUserId}', '${unconfirmedEmail}', NULL)
+      ON CONFLICT (id) DO NOTHING;
+    `);
+
+    // Case 1: Member inserting an entry with another person's email must fail
+    await db.exec(`
+      SET ROLE authenticated;
+      SET "request.jwt.claim.sub" = '${confirmedUserId}';
+      SET "request.jwt.claim.email" = '${confirmedEmail}';
+    `);
+
+    await expect(
+      db.exec(`
+        INSERT INTO public.waitlist_entries (user_id, email, city, gender, intent)
+        VALUES ('${confirmedUserId}', 'victim.other@example.com', 'Chennai', 'man', 'long_term');
+      `)
+    ).rejects.toThrow();
+
+    // Case 2: Member with unconfirmed email must fail
+    await db.exec(`
+      SET ROLE authenticated;
+      SET "request.jwt.claim.sub" = '${unconfirmedUserId}';
+      SET "request.jwt.claim.email" = '${unconfirmedEmail}';
+    `);
+
+    await expect(
+      db.exec(`
+        INSERT INTO public.waitlist_entries (user_id, email, city, gender, intent)
+        VALUES ('${unconfirmedUserId}', '${unconfirmedEmail}', 'Chennai', 'man', 'long_term');
+      `)
+    ).rejects.toThrow();
+
+    // Case 3: Confirmed member inserting their own email must succeed
+    await db.exec(`
+      SET ROLE authenticated;
+      SET "request.jwt.claim.sub" = '${confirmedUserId}';
+      SET "request.jwt.claim.email" = '${confirmedEmail}';
+    `);
+
+    await expect(
+      db.exec(`
+        INSERT INTO public.waitlist_entries (user_id, email, city, gender, intent)
+        VALUES ('${confirmedUserId}', '${confirmedEmail}', 'Chennai', 'man', 'long_term');
+      `)
+    ).resolves.toBeDefined();
+
+    // Reset role back to default superuser
+    await db.exec(`RESET ROLE;`);
   });
 });

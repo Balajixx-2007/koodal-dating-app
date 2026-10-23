@@ -8,7 +8,7 @@ BEGIN;
 -- 1. Setup Mock Test Environment
 CREATE EXTENSION IF NOT EXISTS "pgtap";
 
-SELECT plan(12);
+SELECT plan(14);
 
 -- ------------------------------------------------------------------------------
 -- Test 1: Verify Audit Log Immutability (Append-only enforcement)
@@ -98,7 +98,35 @@ SELECT is(
 );
 
 -- ------------------------------------------------------------------------------
--- Test 4: Section 13 Formula Verification in SQL
+-- Test 4: Member inserting another person's email must fail
+-- ------------------------------------------------------------------------------
+PREPARE test_insert_foreign_email AS
+    INSERT INTO public.waitlist_entries (user_id, email, city, gender, intent)
+    VALUES ('a0000000-0000-0000-0000-000000000001', 'victim@example.com', 'Chennai', 'man', 'long_term');
+
+SELECT throws_ok(
+    'test_insert_foreign_email',
+    'Member inserting another person''s email must fail'
+);
+
+-- ------------------------------------------------------------------------------
+-- Test 5: Member with unconfirmed email must fail
+-- ------------------------------------------------------------------------------
+-- Switch to unconfirmed user session
+SET LOCAL "request.jwt.claim.sub" TO 'u0000000-0000-0000-0000-000000000002';
+SET LOCAL "request.jwt.claim.email" TO 'unconfirmed@example.com';
+
+PREPARE test_insert_unconfirmed_email AS
+    INSERT INTO public.waitlist_entries (user_id, email, city, gender, intent)
+    VALUES ('u0000000-0000-0000-0000-000000000002', 'unconfirmed@example.com', 'Chennai', 'man', 'long_term');
+
+SELECT throws_ok(
+    'test_insert_unconfirmed_email',
+    'Member with unconfirmed email must fail'
+);
+
+-- ------------------------------------------------------------------------------
+-- Test 6: Section 13 Formula Verification in SQL
 -- ------------------------------------------------------------------------------
 RESET ROLE;
 

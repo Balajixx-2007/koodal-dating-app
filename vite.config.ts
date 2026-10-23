@@ -8,4 +8,8 @@ export default defineConfig({
     tailwindcss(),
     react()
   ],
+  test: {
+    hookTimeout: 120000,
+    testTimeout: 60000
+  }
 });
