@@ -28,11 +28,24 @@ jobs:
         with:
           version: latest
 
+      - name: Stop host PostgreSQL if running
+        run: sudo systemctl stop postgresql || true
+
       - name: Start Supabase local instance
-        run: supabase start --debug
+        run: |
+          supabase start 2>&1 | tee supabase_start.log
+          echo "### Supabase Start Output" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat supabase_start.log >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
 
       - name: Run Supabase pgTAP database tests
-        run: supabase test db
+        run: |
+          supabase test db 2>&1 | tee supabase_test.log
+          echo "### Supabase Test DB Output" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat supabase_test.log >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
 
       - name: Run Vitest database & formula tests
         run: npm test
