@@ -13,13 +13,6 @@ SELECT plan(25);
 -- 1. Setup Test Fixtures & Seed Data
 -- ==============================================================================
 
--- Fix bigint parameter matching for calculate_waitlist_score during seed
-CREATE OR REPLACE FUNCTION public.calculate_waitlist_score(
-    p_city TEXT, p_selfie BOOLEAN, p_profile BOOLEAN, p_referrals BIGINT, p_created TIMESTAMPTZ
-) RETURNS INT AS $$
-    SELECT public.calculate_waitlist_score(p_city, p_selfie, p_profile, p_referrals::int, p_created);
-$$ LANGUAGE sql IMMUTABLE;
-
 -- Seed Admin
 INSERT INTO auth.users (id, email, email_confirmed_at)
 VALUES ('00000000-0000-0000-0000-000000000001', 'admin@example.com', NOW())
@@ -68,6 +61,15 @@ ON CONFLICT (email) DO UPDATE SET status = 'admitted';
 
 INSERT INTO public.verifications (user_id, selfie_path, result)
 VALUES ('22222222-2222-2222-2222-222222222222', 'selfies/22222222-2222-2222-2222-222222222222/selfie.jpg', 'approved');
+
+-- Seed Member B Profile Photos (Approved and Pending)
+INSERT INTO public.profile_photos (id, owner, storage_path, position, status)
+VALUES ('bbbbbbbb-0000-0000-0000-000000000001', '22222222-2222-2222-2222-222222222222', 'photos/22222222-2222-2222-2222-222222222222/photo1.jpg', 0, 'approved')
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.profile_photos (id, owner, storage_path, position, status)
+VALUES ('bbbbbbbb-0000-0000-0000-000000000002', '22222222-2222-2222-2222-222222222222', 'photos/22222222-2222-2222-2222-222222222222/photo2_pending.jpg', 1, 'pending')
+ON CONFLICT (id) DO NOTHING;
 
 -- Seed Banned User
 INSERT INTO auth.users (id, email, email_confirmed_at)
@@ -126,6 +128,8 @@ PREPARE test_delete_like AS
 
 SELECT throws_ok(
     'test_delete_like',
+    '42501',
+    NULL,
     '9. Members cannot delete likes'
 );
 
@@ -150,6 +154,7 @@ PREPARE test_21st_like AS
 SELECT throws_ok(
     'test_21st_like',
     'P0001',
+    NULL,
     '10. 21st like in rolling 24h throws daily limit exception'
 );
 
@@ -201,6 +206,8 @@ PREPARE test_oversized_msg AS
 
 SELECT throws_ok(
     'test_oversized_msg',
+    'P0001',
+    NULL,
     '14. Message body exceeding 2000 characters is rejected'
 );
 
@@ -215,6 +222,8 @@ PREPARE test_empty_msg AS
 
 SELECT throws_ok(
     'test_empty_msg',
+    'P0001',
+    NULL,
     '15. Empty message body is rejected'
 );
 
@@ -239,6 +248,8 @@ PREPARE test_tamper_msg_read AS
 
 SELECT throws_ok(
     'test_tamper_msg_read',
+    '42501',
+    NULL,
     '16. Direct UPDATE on messages (read_at tampering) is prohibited'
 );
 
@@ -256,6 +267,8 @@ SET LOCAL "request.jwt.claim.email" TO 'member_a@example.com';
 
 SELECT throws_ok(
     'SELECT * FROM public.admins',
+    '42501',
+    NULL,
     '18. Non-admin cannot SELECT from public.admins'
 );
 
@@ -266,6 +279,7 @@ PREPARE test_non_admin_audit AS
 SELECT throws_ok(
     'test_non_admin_audit',
     '42501',
+    NULL,
     '19. Non-admin cannot INSERT into public.audit_log'
 );
 
@@ -278,6 +292,8 @@ SET LOCAL "request.jwt.claim.email" TO 'member_a@example.com';
 
 SELECT throws_ok(
     'SELECT public.review_photo(''bbbbbbbb-0000-0000-0000-000000000002''::uuid, ''approved'')',
+    '42501',
+    NULL,
     '21. Non-admin cannot call review_photo admin function'
 );
 
@@ -292,10 +308,13 @@ SELECT lives_ok(
 
 SELECT ok(
     (SELECT NOT EXISTS (
-        SELECT 1 FROM information_schema.columns 
-        WHERE table_schema = 'public' 
-          AND table_name = 'get_discovery_feed' 
-          AND column_name IN ('email', 'birth_date')
+        SELECT 1 
+        FROM pg_proc p
+        JOIN pg_namespace n ON p.pronamespace = n.oid
+        CROSS JOIN unnest(p.proargnames) AS col(name)
+        WHERE n.nspname = 'public' 
+          AND p.proname = 'get_discovery_feed'
+          AND col.name IN ('email', 'birth_date')
     )),
     '23. Discovery feed never returns email or birth_date'
 );
@@ -304,8 +323,19 @@ SELECT ok(
 -- ==============================================================================
 -- Test 24 - 25: Blocked & Banned Message Restrictions (Rule 8)
 -- ==============================================================================
+RESET ROLE;
+INSERT INTO public.blocks (blocker, blocked) 
+VALUES ('22222222-2222-2222-2222-222222222222', '11111111-1111-1111-1111-111111111111') 
+ON CONFLICT (blocker, blocked) DO NOTHING;
+
+SET LOCAL ROLE authenticated;
+SET LOCAL "request.jwt.claim.sub" TO '11111111-1111-1111-1111-111111111111';
+SET LOCAL "request.jwt.claim.email" TO 'member_a@example.com';
+
 SELECT throws_ok(
     'INSERT INTO public.messages (match_id, sender_id, body) VALUES ((SELECT id FROM public.matches LIMIT 1), ''11111111-1111-1111-1111-111111111111'', ''Blocked test message'')',
+    'P0001',
+    NULL,
     '24. Blocked members cannot send messages to each other'
 );
 
@@ -314,6 +344,8 @@ SET LOCAL "request.jwt.claim.email" TO 'banned@example.com';
 
 SELECT throws_ok(
     'INSERT INTO public.messages (match_id, sender_id, body) VALUES ((SELECT id FROM public.matches LIMIT 1), ''88888888-8888-8888-8888-888888888888'', ''Banned test message'')',
+    '42501',
+    NULL,
     '25. Banned user cannot send messages'
 );
 
