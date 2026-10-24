@@ -27,8 +27,11 @@ import { AdminSelfies } from './pages/admin/AdminSelfies';
 import { AdminUsers } from './pages/admin/AdminUsers';
 import { AdminWaitlist } from './pages/admin/AdminWaitlist';
 
+import { canAccessMemberRoutes } from './lib/waitlist-gate';
+
 export const MainContent: React.FC = () => {
-  const { currentView } = useApp();
+  const { currentView, currentUser, userWaitlistStatus } = useApp();
+  const hasMemberAccess = canAccessMemberRoutes(currentUser, userWaitlistStatus);
 
   const renderCurrentView = () => {
     switch (currentView) {
@@ -45,15 +48,15 @@ export const MainContent: React.FC = () => {
       case '/auth/callback':
         return <AuthCallback />;
       case '/onboarding':
-        return <Onboarding />;
+        return hasMemberAccess ? <Onboarding /> : <WaitlistStatus />;
       case '/discover':
-        return <Discover />;
+        return hasMemberAccess ? <Discover /> : <WaitlistStatus />;
       case '/matches':
-        return <Matches />;
+        return hasMemberAccess ? <Matches /> : <WaitlistStatus />;
       case '/me':
-        return <MyProfile />;
+        return hasMemberAccess ? <MyProfile /> : <WaitlistStatus />;
       case '/settings':
-        return <Settings />;
+        return hasMemberAccess ? <Settings /> : <WaitlistStatus />;
       case '/safety':
         return <Safety />;
       case '/terms':
@@ -74,12 +77,12 @@ export const MainContent: React.FC = () => {
         return <AdminWaitlist />;
       default:
         if (currentView.startsWith('/profile/')) {
-          return <ProfileDetail />;
+          return hasMemberAccess ? <ProfileDetail /> : <WaitlistStatus />;
         }
         if (currentView.startsWith('/chat/')) {
-          return <Chat />;
+          return hasMemberAccess ? <Chat /> : <WaitlistStatus />;
         }
-        return <Discover />;
+        return hasMemberAccess ? <Discover /> : <WaitlistStatus />;
     }
   };
 

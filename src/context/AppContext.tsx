@@ -18,6 +18,7 @@ import { ChatService, FetchMessagesOptions } from '../lib/chat-service';
 import { ModerationService } from '../lib/moderation-service';
 import { WaitlistService } from '../lib/waitlist-service';
 import { ProfileService } from '../lib/profile-service';
+import { EmailService } from '../lib/email-service';
 
 interface AppContextType {
   language: Language;
@@ -941,6 +942,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdAt: new Date().toISOString()
     };
 
+    // Transactional join notification
+    EmailService.sendWaitlistJoinEmail({
+      email: data.email,
+      city: data.city,
+      lane,
+      initialScore,
+      referralCode: data.referralCode
+    }).catch(console.error);
+
     setWaitlistEntries(prev => [newEntry, ...prev]);
     setUserWaitlistStatus(newEntry);
     localStorage.setItem('koodal_my_waitlist_id', newEntry.id);
@@ -1008,6 +1018,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       .slice(0, actualMen);
 
     const admittedIds = new Set([...eligibleWomen.map(w => w.id), ...eligibleMen.map(m => m.id)]);
+
+    // Dispatch batch admission transactional emails with 7-day claim deadline
+    const claimDeadline = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    [...eligibleWomen, ...eligibleMen].forEach(member => {
+      EmailService.sendBatchAdmissionEmail({
+        email: member.email,
+        city: member.city,
+        claimDeadline
+      }).catch(console.error);
+    });
 
     setWaitlistEntries(prev => prev.map(w => {
       if (admittedIds.has(w.id)) {
