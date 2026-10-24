@@ -1,21 +1,28 @@
-name: Supabase CI Test Suite
+name: Supabase Database Tests
 
 on:
-  pull_request:
   push:
-    branches: [main]
-
-permissions:
-  contents: write
+    branches: [ main ]
+    paths:
+      - 'supabase/**'
+      - '.github/workflows/supabase-test.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'supabase/**'
+      - '.github/workflows/supabase-test.yml'
+  workflow_dispatch:
 
 jobs:
-  database-tests:
-    name: Supabase Start & Database pgTAP Tests
+  test-database:
+    name: Run pgTAP & Admission Formula Suite
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -34,20 +41,30 @@ jobs:
       - name: Stop host PostgreSQL if running
         run: sudo systemctl stop postgresql || true
 
-      - name: Start Supabase local instance
+      - name: Start Supabase local instance (Pre-Phase 3 baseline)
         run: |
+          # Temporarily hold migration 10 to boot Supabase at pre-Phase 3 baseline (migrations 1 to 9)
+          mv supabase/migrations/20261024000010_phase3_core_security_and_discovery.sql supabase/migrations/20261024000010_phase3_core_security_and_discovery.sql.pending
           supabase start
 
-      - name: Run Supabase pgTAP database tests
+      - name: Run Supabase pgTAP database tests (Red and Green runs)
         run: |
-          > pg_tap_output.txt
           CONTAINER_ID=$(docker ps --filter "name=supabase_db_" --format "{{.ID}}")
-          for f in supabase/tests/*.sql; do
-            echo "=== TAP Stream: $f ===" | tee -a pg_tap_output.txt
-            docker exec -i "$CONTAINER_ID" psql -U postgres -d postgres -X -q -t -A < "$f" 2>&1 | tee -a pg_tap_output.txt || true
-          done
+          > pg_tap_output.txt
 
-          echo "=== Supabase CLI test db ===" | tee -a pg_tap_output.txt
+          echo "=== 1. RED STATE TAP OUTPUT (Tests against schema before Phase 3 migrations) ===" | tee -a pg_tap_output.txt
+          docker exec -i "$CONTAINER_ID" psql -U postgres -d postgres -X -q -t -A < supabase/tests/phase3_security_and_discovery.sql 2>&1 | tee -a pg_tap_output.txt || true
+
+          # Restore and apply Phase 3 migration 10
+          mv supabase/migrations/20261024000010_phase3_core_security_and_discovery.sql.pending supabase/migrations/20261024000010_phase3_core_security_and_discovery.sql
+          docker exec -i "$CONTAINER_ID" psql -U postgres -d postgres -X -q < supabase/migrations/20261024000010_phase3_core_security_and_discovery.sql
+
+          echo "" | tee -a pg_tap_output.txt
+          echo "=== 2. GREEN STATE TAP OUTPUT (Tests against schema after Phase 3 migrations) ===" | tee -a pg_tap_output.txt
+          docker exec -i "$CONTAINER_ID" psql -U postgres -d postgres -X -q -t -A < supabase/tests/phase3_security_and_discovery.sql 2>&1 | tee -a pg_tap_output.txt
+
+          echo "" | tee -a pg_tap_output.txt
+          echo "=== 3. Supabase CLI test db (Full Suite: Phase 2 + Phase 3) ===" | tee -a pg_tap_output.txt
           supabase test db 2>&1 | tee -a pg_tap_output.txt
 
       - name: Run Vitest database & formula tests
@@ -61,7 +78,6 @@ jobs:
           git checkout -B ci-logs
           mkdir -p ci-artifacts
           cp pg_tap_output.txt ci-artifacts/pg_tap_output.txt || true
-          cp pg_tap_summary.txt ci-artifacts/pg_tap_summary.txt || true
           git add ci-artifacts/
           git commit -m "ci: publish latest pgTAP test results [skip ci]" || true
           git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git HEAD:refs/heads/ci-logs --force

@@ -111,6 +111,22 @@ CREATE POLICY "Users can view own data" ON public.users
 REVOKE SELECT, INSERT, UPDATE, DELETE ON public.admins FROM authenticated, anon, public;
 REVOKE INSERT, UPDATE, DELETE ON public.audit_log FROM authenticated, anon, public;
 
+-- Fix bug exposed by hardening test: prevent members from inserting approved selfies
+DROP POLICY IF EXISTS "Users can submit selfie verifications" ON public.verifications;
+CREATE POLICY "Users can submit selfie verifications"
+ON public.verifications FOR INSERT
+TO authenticated
+WITH CHECK (
+    auth.uid() = user_id
+    AND (result IS NULL OR result = 'pending'::verification_result)
+    AND reviewed_by IS NULL
+    AND reviewed_at IS NULL
+);
+
+-- Revoke execute on admit_batch from anon and public
+REVOKE EXECUTE ON FUNCTION public.admit_batch(TEXT, INT, BOOLEAN) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.admit_batch(TEXT, INT, BOOLEAN) TO authenticated;
+
 -- 7. RLS for profile_photos
 DROP POLICY IF EXISTS "Profile photos select" ON public.profile_photos;
 CREATE POLICY "Profile photos select" ON public.profile_photos
@@ -489,7 +505,7 @@ $$;
 REVOKE EXECUTE ON FUNCTION public.review_selfie(UUID, verification_result, TEXT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.review_selfie(UUID, verification_result, TEXT) TO authenticated;
 
--- 13. Discovery Function: get_discovery_feed (Same-city, no distance, verified privacy)
+-- 13. Discovery Function: get_discovery_feed (Same-city, no distance, verified privacy, stable order)
 CREATE OR REPLACE FUNCTION public.get_discovery_feed(p_limit INT DEFAULT 20, p_offset INT DEFAULT 0)
 RETURNS TABLE (
     user_id UUID,
@@ -593,7 +609,7 @@ BEGIN
           OR cardinality(v_pref_intents) = 0 
           OR p.intent = ANY(v_pref_intents)
       )
-    ORDER BY p.updated_at DESC
+    ORDER BY p.updated_at DESC, p.user_id ASC
     LIMIT p_limit
     OFFSET p_offset;
 END;
