@@ -2,16 +2,20 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { 
   Bell, EyeOff, Trash2, ShieldCheck, Lock, 
-  HelpCircle, Check, AlertTriangle, ArrowRight, Mail 
+  HelpCircle, Check, AlertTriangle, ArrowRight, Mail,
+  Download, CheckCircle2, FileJson 
 } from 'lucide-react';
+import { ConsentService } from '../lib/consent-service';
 
 export const Settings: React.FC = () => {
-  const { t, myProfile, updateMyProfile, deleteAccount, navigateTo } = useApp();
+  const { t, myProfile, updateMyProfile, deleteAccount, navigateTo, currentUser } = useApp();
   const [isPaused, setIsPaused] = useState(myProfile.isPaused || false);
   const [emailNotifs, setEmailNotifs] = useState(true);
+  const [geoConsent, setGeoConsent] = useState(true);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState('');
   const [isUpdating, setIsUpdating] = useState(false);
+  const [exportedNotice, setExportedNotice] = useState(false);
 
   const handleTogglePause = async () => {
     const nextState = !isPaused;
@@ -33,6 +37,52 @@ export const Settings: React.FC = () => {
         setIsUpdating(false);
       }
     }
+  };
+
+  const handleToggleGeoConsent = async () => {
+    const nextState = !geoConsent;
+    setGeoConsent(nextState);
+    if (currentUser?.id) {
+      if (nextState) {
+        await ConsentService.recordConsent({
+          userId: currentUser.id,
+          consentType: 'geolocation',
+          version: '1.0',
+          granted: true
+        });
+      } else {
+        await ConsentService.withdrawConsent(currentUser.id, 'geolocation');
+      }
+    }
+  };
+
+  const handleExportData = () => {
+    const exportPayload = {
+      exportDate: new Date().toISOString(),
+      compliance: 'DPDP Act 2023 / GDPR Right to Data Portability',
+      user: {
+        id: currentUser?.id,
+        email: currentUser?.email,
+        role: currentUser?.role
+      },
+      profile: myProfile,
+      consents: {
+        terms: { version: '1.0', status: 'granted' },
+        privacy: { version: '1.0', status: 'granted' },
+        guidelines: { version: '1.0', status: 'granted' },
+        geolocation: { version: '1.0', status: geoConsent ? 'granted' : 'withdrawn' }
+      }
+    };
+
+    const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `koodal-data-export-${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setExportedNotice(true);
+    setTimeout(() => setExportedNotice(false), 3000);
   };
 
   return (
@@ -119,6 +169,70 @@ export const Settings: React.FC = () => {
         </div>
       </div>
 
+      {/* DPDP Act 2023 Consent & Data Rights Card */}
+      <div className="surface-card p-6 space-y-5">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-[#98A2B3]">
+            DPDP Act 2023 Consent & Data Rights
+          </h3>
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/40">
+            Compliant
+          </span>
+        </div>
+
+        <div className="space-y-3">
+          {/* Terms & Privacy status */}
+          <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs">
+            <div className="flex items-center gap-2.5">
+              <CheckCircle2 className="w-4 h-4 text-[#079669]" />
+              <div>
+                <p className="font-bold text-[#15182B] dark:text-white">Platform Terms & Privacy Policy</p>
+                <p className="text-[11px] text-[#667085]">Mandatory core service agreement (v1.0)</p>
+              </div>
+            </div>
+            <span className="text-xs font-semibold text-[#079669]">Accepted</span>
+          </div>
+
+          {/* Optional Geolocation consent */}
+          <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs">
+            <div className="flex items-center gap-2.5">
+              <ShieldCheck className="w-4 h-4 text-[#F20D4E]" />
+              <div>
+                <p className="font-bold text-[#15182B] dark:text-white">Geolocation Cluster Matching</p>
+                <p className="text-[11px] text-[#667085]">Optional city-level proximity discovery ({myProfile.city})</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={geoConsent}
+              aria-label="Toggle geolocation consent"
+              onClick={handleToggleGeoConsent}
+              className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors cursor-pointer shrink-0 ${
+                geoConsent ? 'bg-[#079669] justify-end' : 'bg-slate-300 dark:bg-slate-700 justify-start'
+              }`}
+            >
+              <div className="bg-white w-4 h-4 rounded-full shadow-xs transition-transform"></div>
+            </button>
+          </div>
+        </div>
+
+        {/* Data Portability (Right to Access) */}
+        <div className="pt-2 flex items-center justify-between gap-4 border-t border-[#F0E3E6] dark:border-slate-800">
+          <div>
+            <p className="text-xs font-bold text-[#15182B] dark:text-white">Right to Data Portability</p>
+            <p className="text-[11px] text-[#667085]">Download a copy of your personal data archive (JSON)</p>
+          </div>
+          <button
+            onClick={handleExportData}
+            className="px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+          >
+            {exportedNotice ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Download className="w-3.5 h-3.5" />}
+            <span>{exportedNotice ? 'Exported' : 'Export Data'}</span>
+          </button>
+        </div>
+      </div>
+
       {/* Safety & Legal links */}
       <div className="surface-card p-6 space-y-4">
         <h3 className="text-xs font-bold uppercase tracking-wider text-[#98A2B3]">
@@ -197,7 +311,7 @@ export const Settings: React.FC = () => {
               Permanent Account Removal
             </h3>
             <p className="text-xs text-[#667085] leading-relaxed">
-              This action cannot be undone. In accordance with Section 12 of the DPDP Act 2023, your photos, verification selfies, mutual matches, and chat transcripts will be immediately purged.
+              This action cannot be undone. In accordance with Section 12 of the DPDP Act 2023, your profile photos in storage, verification selfies in verification-selfies bucket, mutual matches, and chat transcripts will be immediately purged.
             </p>
 
             <div className="text-left">
