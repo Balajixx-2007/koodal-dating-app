@@ -4,8 +4,9 @@ import { IntentBadge } from '../components/IntentBadge';
 import { VerifiedBadge } from '../components/VerifiedBadge';
 import { ReportBlockModal } from '../components/ReportBlockModal';
 import { 
-  ArrowLeft, Send, ShieldAlert, Sparkles, UserRound, Heart 
+  ArrowLeft, Send, ShieldAlert, Sparkles, UserRound, Heart, AlertCircle 
 } from 'lucide-react';
+import { ChatService } from '../lib/chat-service';
 
 interface ChatProps {
   matchId?: string;
@@ -19,13 +20,17 @@ export const Chat: React.FC<ChatProps> = ({ matchId }) => {
     sendMessage, 
     currentUser, 
     currentView,
-    navigateTo 
+    navigateTo,
+    fetchMessagesForMatch,
+    markMatchAsRead
   } = useApp();
 
   const [inputBody, setInputBody] = useState('');
   const [reporting, setReporting] = useState(false);
   const [likedMessageIds, setLikedMessageIds] = useState<string[]>([]);
   const [showDateIdeas, setShowDateIdeas] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
+  const [isSending, setIsSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const activeMatchId = matchId || viewParam || (currentView.startsWith('/chat/') ? currentView.replace('/chat/', '') : undefined) || matches[0]?.id;
@@ -38,6 +43,27 @@ export const Chat: React.FC<ChatProps> = ({ matchId }) => {
     { label: '📚 Higginbothams Books', text: 'I would love to browse books at Higginbothams and chat over coffee!' },
     { label: '🕯️ Candlelight Dinner', text: 'Are you free for an intimate dinner at Amethyst Cafe this Friday?' },
   ];
+
+  // Fetch real messages & subscribe to realtime changes on mount or when activeMatchId changes
+  useEffect(() => {
+    if (!activeMatchId) return;
+
+    fetchMessagesForMatch(activeMatchId);
+    markMatchAsRead(activeMatchId);
+
+    const channel = ChatService.subscribeToMessages(activeMatchId, (newMsg) => {
+      fetchMessagesForMatch(activeMatchId);
+      if (currentUser?.id && newMsg.sender_id !== currentUser.id) {
+        markMatchAsRead(activeMatchId);
+      }
+    });
+
+    return () => {
+      if (channel && typeof channel.unsubscribe === 'function') {
+        channel.unsubscribe();
+      }
+    };
+  }, [activeMatchId, fetchMessagesForMatch, markMatchAsRead, currentUser?.id]);
 
   const toggleMessageLike = (msgId: string) => {
     setLikedMessageIds(prev =>
@@ -63,15 +89,37 @@ export const Chat: React.FC<ChatProps> = ({ matchId }) => {
     );
   }
 
-  const handleSend = (e: React.FormEvent) => {
+  const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputBody.trim()) return;
-    sendMessage(match.id, inputBody.trim());
-    setInputBody('');
+    const trimmed = inputBody.trim();
+    if (!trimmed || isSending) return;
+
+    setSendError(null);
+    setIsSending(true);
+    try {
+      const success = await sendMessage(match.id, trimmed);
+      if (success === false) {
+        setSendError('Unable to send message. Please verify your connection.');
+      } else {
+        setInputBody('');
+      }
+    } catch {
+      setSendError('An unexpected error occurred while sending your message.');
+    } finally {
+      setIsSending(false);
+    }
   };
 
-  const handleSendIcebreaker = (promptText: string) => {
-    sendMessage(match.id, promptText);
+  const handleSendIcebreaker = async (promptText: string) => {
+    setSendError(null);
+    try {
+      const success = await sendMessage(match.id, promptText);
+      if (success === false) {
+        setSendError('Unable to send message. Please verify your connection.');
+      }
+    } catch {
+      setSendError('An unexpected error occurred while sending your message.');
+    }
   };
 
   const handlePickDateIdea = (dateText: string) => {
@@ -95,7 +143,7 @@ export const Chat: React.FC<ChatProps> = ({ matchId }) => {
           </button>
 
           <div 
-            onClick={() => navigateTo(`/profile/${partner.id}`)}
+            onClick={() => navigateTo(`/profile/${partner.id || partner.userId}`)}
             className="relative cursor-pointer shrink-0"
           >
             <img
@@ -109,7 +157,7 @@ export const Chat: React.FC<ChatProps> = ({ matchId }) => {
           </div>
 
           <div 
-            onClick={() => navigateTo(`/profile/${partner.id}`)}
+            onClick={() => navigateTo(`/profile/${partner.id || partner.userId}`)}
             className="cursor-pointer min-w-0"
           >
             <div className="flex items-center gap-1.5">
@@ -127,7 +175,7 @@ export const Chat: React.FC<ChatProps> = ({ matchId }) => {
         {/* Action Controls */}
         <div className="flex items-center gap-1">
           <button
-            onClick={() => navigateTo(`/profile/${partner.id}`)}
+            onClick={() => navigateTo(`/profile/${partner.id || partner.userId}`)}
             className="p-2 rounded-xl text-[#98A2B3] hover:text-[#F20D4E] hover:bg-[#FFF0F3] dark:hover:bg-slate-800 transition-colors"
             title="View Profile"
             aria-label="View Profile"
@@ -158,6 +206,14 @@ export const Chat: React.FC<ChatProps> = ({ matchId }) => {
           Safety Guide
         </button>
       </div>
+
+      {/* Error Banner */}
+      {sendError && (
+        <div className="mb-2 p-2.5 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 flex items-center gap-2 text-xs text-red-700 dark:text-red-300 shrink-0">
+          <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
+          <span>{sendError}</span>
+        </div>
+      )}
 
       {/* Conversation Openers & Date Ideas */}
       <div className="mb-2 space-y-1.5 shrink-0">
@@ -222,7 +278,7 @@ export const Chat: React.FC<ChatProps> = ({ matchId }) => {
           </div>
         ) : (
           currentMessages.map((msg) => {
-            const isMe = msg.senderId === currentUser?.id;
+            const isMe = msg.senderId === currentUser?.id || msg.senderId === 'usr_me_01';
             const timeStr = new Date(msg.sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             const isHearted = likedMessageIds.includes(msg.id);
 
@@ -277,11 +333,13 @@ export const Chat: React.FC<ChatProps> = ({ matchId }) => {
           value={inputBody}
           onChange={(e) => setInputBody(e.target.value)}
           placeholder="Type a thoughtful message or date idea..."
-          className="flex-1 text-xs sm:text-sm p-3 rounded-xl border border-[#F0E3E6] dark:border-slate-700 bg-white dark:bg-slate-800 text-[#15182B] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#F20D4E] shadow-xs"
+          maxLength={2000}
+          disabled={isSending}
+          className="flex-1 text-xs sm:text-sm p-3 rounded-xl border border-[#F0E3E6] dark:border-slate-700 bg-white dark:bg-slate-800 text-[#15182B] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#F20D4E] shadow-xs disabled:opacity-50"
         />
         <button
           type="submit"
-          disabled={!inputBody.trim()}
+          disabled={!inputBody.trim() || isSending}
           className="p-3 rounded-xl btn-primary-rose flex items-center justify-center disabled:opacity-50"
           title="Send message"
           aria-label="Send message"
