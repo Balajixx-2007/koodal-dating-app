@@ -1,15 +1,23 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { RelationshipIntent } from '../types';
 import { IntentBadge } from '../components/IntentBadge';
 import { 
   Camera, ArrowRight, ArrowLeft, 
-  Check, Upload, MapPin, BadgeCheck 
+  Check, Upload, MapPin, BadgeCheck, AlertCircle, Loader2, WifiOff 
 } from 'lucide-react';
+import { validateBirthDateAge, ProfileService } from '../lib/auth-service';
+import { supabase, isOnline } from '../lib/supabase';
 
 export const Onboarding: React.FC = () => {
-  const { t, myProfile, updateMyProfile, navigateTo } = useApp();
+  const { t, myProfile, updateMyProfile, navigateTo, currentUser } = useApp();
   const [step, setStep] = useState(1);
+  const [stepError, setStepError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [offline, setOffline] = useState(!isOnline());
+
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const selfieInputRef = useRef<HTMLInputElement>(null);
 
   // Form states
   const [intent, setIntent] = useState<RelationshipIntent>(myProfile.intent);
@@ -18,9 +26,9 @@ export const Onboarding: React.FC = () => {
   const [gender, setGender] = useState(myProfile.gender);
   const [city, setCity] = useState(myProfile.city);
   const [bio, setBio] = useState(myProfile.bio);
-  const [photos] = useState<string[]>(myProfile.photos);
+  const [photos, setPhotos] = useState<string[]>(myProfile.photos || []);
   const [selfieUrl, setSelfieUrl] = useState<string>(myProfile.selfieUrl || '');
-  const [selectedInterests, setSelectedInterests] = useState<string[]>(myProfile.interests);
+  const [selectedInterests, setSelectedInterests] = useState<string[]>(myProfile.interests || []);
   const [promptAnswer1, setPromptAnswer1] = useState(myProfile.prompts[0]?.answer || '');
   const [promptAnswer2, setPromptAnswer2] = useState(myProfile.prompts[1]?.answer || '');
   const [selfieTaken, setSelfieTaken] = useState(!!myProfile.selfieUrl);
@@ -32,38 +40,155 @@ export const Onboarding: React.FC = () => {
     'Architecture', 'Board Games', 'Yoga & Wellness'
   ];
 
-  const handleNext = () => {
-    if (step < 5) {
-      setStep(step + 1);
-    } else {
-      // Save all profile data
-      updateMyProfile({
-        name,
+  useEffect(() => {
+    const handleOnline = () => setOffline(false);
+    const handleOffline = () => setOffline(true);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  const handleNext = async () => {
+    setStepError('');
+
+    if (step === 1) {
+      if (!intent) {
+        setStepError('Please select your relationship intention.');
+        return;
+      }
+      setStep(2);
+      return;
+    }
+
+    if (step === 2) {
+      if (!name.trim()) {
+        setStepError('Please enter your full or display name.');
+        return;
+      }
+
+      const ageCheck = validateBirthDateAge(birthDate);
+      if (!ageCheck.valid) {
+        setStepError(ageCheck.error || 'You must be 18 years of age or older to join.');
+        return;
+      }
+
+      if (!city.trim()) {
+        setStepError('Please enter your city.');
+        return;
+      }
+
+      if (!bio.trim()) {
+        setStepError('Please write a short bio about yourself.');
+        return;
+      }
+
+      setStep(3);
+      return;
+    }
+
+    if (step === 3) {
+      setStep(4);
+      return;
+    }
+
+    if (step === 4) {
+      setStep(5);
+      return;
+    }
+
+    if (step === 5) {
+      if (selectedInterests.length === 0) {
+        setStepError('Please choose at least 1 interest (maximum 6).');
+        return;
+      }
+
+      if (offline || !isOnline()) {
+        setStepError('You appear to be offline. Please reconnect to save your profile.');
+        return;
+      }
+
+      setSaving(true);
+
+      const formData = {
+        name: name.trim(),
         birthDate,
         gender: gender as any,
         intent,
-        city,
-        bio,
-        photos,
-        selfieUrl,
-        interests: selectedInterests,
+        city: city.trim(),
+        bio: bio.trim(),
+        interests: selectedInterests.slice(0, 6),
         prompts: [
           {
             id: 'p1',
             question: 'A non-negotiable for me in a relationship is...',
             questionTa: 'எனது உறவில் சமரசம் செய்ய முடியாத ஒன்று...',
-            answer: promptAnswer1 || 'Clear honest communication.'
+            answer: promptAnswer1.trim() || 'Clear honest communication.'
           },
           {
             id: 'p2',
             question: 'My ideal Sunday in Chennai looks like...',
             questionTa: 'சென்னையில் எனது கனவு ஞாயிறு இப்படி இருக்கும்...',
-            answer: promptAnswer2 || 'Filter coffee by the beach.'
+            answer: promptAnswer2.trim() || 'Filter coffee by the beach.'
           }
-        ],
-        verificationStatus: selfieUrl ? 'pending' : 'unverified'
-      });
-      navigateTo('/discover');
+        ]
+      };
+
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const userId = session?.user?.id || currentUser?.id;
+
+        if (userId) {
+          const result = await ProfileService.saveOnboardingProfile(userId, formData);
+          if (!result.success) {
+            setStepError(result.error || 'Failed to save profile.');
+            setSaving(false);
+            return;
+          }
+
+          // Save default preferences
+          await supabase.from('preferences').upsert({
+            user_id: userId,
+            interested_in: [gender === 'man' ? 'woman' : 'man'],
+            min_age: 18,
+            max_age: 55,
+            max_distance_km: 50,
+            intent_filter: [intent]
+          });
+
+          // Create/update waitlist entry if user is not admitted yet
+          const email = session?.user?.email || currentUser?.email;
+          if (email) {
+            await supabase.from('waitlist_entries').upsert({
+              user_id: userId,
+              email: email,
+              city: city.trim(),
+              gender: gender,
+              intent: intent,
+              score: 50,
+              status: 'waiting'
+            });
+          }
+        }
+
+        // Update local state
+        updateMyProfile({
+          ...formData,
+          photos,
+          selfieUrl,
+          verificationStatus: selfieUrl ? 'pending' : 'unverified'
+        });
+
+        setSaving(false);
+        navigateTo('/discover');
+      } catch (err: any) {
+        setSaving(false);
+        setStepError(err.message || 'An unexpected error occurred while saving profile.');
+      }
     }
   };
 
@@ -77,8 +202,73 @@ export const Onboarding: React.FC = () => {
     }
   };
 
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    setStepError('');
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const file = files[0];
+
+    if (file.size > 5 * 1024 * 1024) {
+      setStepError('File size exceeds 5MB limit.');
+      return;
+    }
+
+    const previewUrl = URL.createObjectURL(file);
+    setPhotos(prev => [...prev.slice(0, 3), previewUrl]);
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        const filePath = `${session.user.id}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+        const { error: uploadError } = await supabase.storage.from('photos').upload(filePath, file);
+        if (!uploadError) {
+          await supabase.from('profile_photos').insert({
+            owner: session.user.id,
+            storage_path: filePath,
+            position: photos.length,
+            status: 'pending'
+          });
+        }
+      }
+    } catch {
+      // Non-blocking preview retained
+    }
+  };
+
+  const handleSelfieUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    setStepError('');
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const file = files[0];
+
+    if (file.size > 5 * 1024 * 1024) {
+      setStepError('Selfie size exceeds 5MB limit.');
+      return;
+    }
+
+    const previewUrl = URL.createObjectURL(file);
+    setSelfieUrl(previewUrl);
+    setSelfieTaken(true);
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        const filePath = `${session.user.id}/selfie-${Date.now()}.jpg`;
+        const { error: uploadError } = await supabase.storage.from('selfies').upload(filePath, file);
+        if (!uploadError) {
+          await supabase.from('verifications').insert({
+            user_id: session.user.id,
+            selfie_path: filePath,
+            result: 'pending'
+          });
+        }
+      }
+    } catch {
+      // Non-blocking preview retained
+    }
+  };
+
   const handleMockSelfie = () => {
-    // Simulate real webcam/selfie capture with trusted test avatar
     const sampleSelfie = 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80';
     setSelfieUrl(sampleSelfie);
     setSelfieTaken(true);
@@ -88,7 +278,7 @@ export const Onboarding: React.FC = () => {
     <div className="max-w-xl mx-auto px-4 py-8">
       {/* Progress header */}
       <div className="mb-6">
-        <div className="flex items-center justify-between text-xs font-semibold text-[#667085] mb-2">
+        <div className="flex items-center justify-between text-xs font-semibold text-[#667085] dark:text-slate-400 mb-2">
           <span>Step {step} of 5</span>
           <span>{Math.round((step / 5) * 100)}% Complete</span>
         </div>
@@ -99,6 +289,20 @@ export const Onboarding: React.FC = () => {
           ></div>
         </div>
       </div>
+
+      {offline && (
+        <div className="mb-4 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-xs font-semibold text-amber-800 dark:text-amber-300 flex items-center gap-2">
+          <WifiOff className="w-4 h-4 shrink-0 text-amber-600" />
+          <span>You are currently offline. Please reconnect to save your updates to the server.</span>
+        </div>
+      )}
+
+      {stepError && (
+        <div className="mb-4 p-3 rounded-xl bg-[#FFF0F3] dark:bg-rose-950/40 border border-[#F8B4C4] dark:border-rose-900/60 text-xs font-semibold text-[#DC2626] flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>{stepError}</span>
+        </div>
+      )}
 
       <div className="surface-card p-6 sm:p-8">
         {/* Step 1: Relationship Intent */}
@@ -123,7 +327,7 @@ export const Onboarding: React.FC = () => {
                   onClick={() => setIntent(iKey)}
                   className={`p-4 rounded-2xl border cursor-pointer transition-all ${
                     intent === iKey
-                      ? 'border-[#F20D4E] bg-[#FFF0F3] shadow-xs ring-1 ring-[#F20D4E]'
+                      ? 'border-[#F20D4E] bg-[#FFF0F3] dark:bg-rose-950/30 shadow-xs ring-1 ring-[#F20D4E]'
                       : 'border-[#F0E3E6] dark:border-slate-800 hover:border-[#F8B4C4]'
                   }`}
                 >
@@ -151,7 +355,7 @@ export const Onboarding: React.FC = () => {
               <h2 className="font-heading text-2xl font-bold text-[#15182B] dark:text-white">
                 {t.onboarding_step_basic}
               </h2>
-              <p className="text-xs text-[#667085] mt-1">
+              <p className="text-xs text-[#667085] dark:text-slate-400 mt-1">
                 Tell potential matches who you are.
               </p>
             </div>
@@ -172,14 +376,20 @@ export const Onboarding: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-[#15182B] dark:text-slate-300 mb-1">
-                  {t.birthdate_label}
+                  {t.birthdate_label} <span className="text-rose-500 font-bold">*</span>
                 </label>
                 <input
                   type="date"
                   value={birthDate}
-                  onChange={(e) => setBirthDate(e.target.value)}
+                  onChange={(e) => {
+                    setBirthDate(e.target.value);
+                    if (stepError) setStepError('');
+                  }}
                   className="w-full text-xs p-3 rounded-xl border border-[#F0E3E6] dark:border-slate-700 bg-white dark:bg-slate-800 text-[#15182B] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#F20D4E]"
                 />
+                <p className="text-[10px] text-[#98A2B3] mt-1">
+                  Must be 18 or older. Verified by strict date verification.
+                </p>
               </div>
 
               <div>
@@ -209,7 +419,7 @@ export const Onboarding: React.FC = () => {
                   type="text"
                   value={city}
                   onChange={(e) => setCity(e.target.value)}
-                  placeholder="e.g. Chennai (Besant Nagar) or IIT Madras Campus"
+                  placeholder="e.g. Chennai"
                   className="w-full text-xs pl-9 pr-3 py-3 rounded-xl border border-[#F0E3E6] dark:border-slate-700 bg-white dark:bg-slate-800 text-[#15182B] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#F20D4E]"
                 />
               </div>
@@ -237,14 +447,22 @@ export const Onboarding: React.FC = () => {
               <h2 className="font-heading text-2xl font-bold text-[#15182B] dark:text-white">
                 {t.onboarding_step_photos}
               </h2>
-              <p className="text-xs text-[#667085] mt-1">
+              <p className="text-xs text-[#667085] dark:text-slate-400 mt-1">
                 Add clear photos. In-browser optimization keeps your data lightweight and private.
               </p>
             </div>
 
+            <input
+              type="file"
+              ref={photoInputRef}
+              onChange={handlePhotoUpload}
+              accept="image/jpeg,image/png,image/webp"
+              className="hidden"
+            />
+
             <div className="grid grid-cols-3 gap-3">
               {photos.map((url, idx) => (
-                <div key={idx} className="relative aspect-[3/4] rounded-2xl overflow-hidden border border-[#F0E3E6] shadow-xs group">
+                <div key={idx} className="relative aspect-[3/4] rounded-2xl overflow-hidden border border-[#F0E3E6] dark:border-slate-800 shadow-xs group">
                   <img src={url} alt={`Photo ${idx + 1}`} className="w-full h-full object-cover" />
                   {idx === 0 && (
                     <span className="absolute bottom-1.5 left-1.5 bg-[#11172B]/85 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">
@@ -254,17 +472,20 @@ export const Onboarding: React.FC = () => {
                 </div>
               ))}
               {photos.length < 4 && (
-                <div className="aspect-[3/4] rounded-2xl border-2 border-dashed border-[#F0E3E6] dark:border-slate-700 flex flex-col items-center justify-center p-3 text-center cursor-pointer hover:border-[#F8B4C4]">
+                <div 
+                  onClick={() => photoInputRef.current?.click()}
+                  className="aspect-[3/4] rounded-2xl border-2 border-dashed border-[#F0E3E6] dark:border-slate-700 flex flex-col items-center justify-center p-3 text-center cursor-pointer hover:border-[#F8B4C4] transition-colors"
+                >
                   <Upload className="w-5 h-5 text-[#98A2B3] mb-1" />
-                  <span className="text-[11px] font-medium text-[#667085]">Add Photo</span>
+                  <span className="text-[11px] font-medium text-[#667085] dark:text-slate-300">Add Photo</span>
                 </div>
               )}
             </div>
 
-            <div className="p-3 bg-[#FFF9F5] dark:bg-slate-800 rounded-xl text-xs text-[#667085] flex items-start gap-2 border border-[#F0E3E6]">
+            <div className="p-3 bg-[#FFF9F5] dark:bg-slate-800 rounded-xl text-xs text-[#667085] dark:text-slate-300 flex items-start gap-2 border border-[#F0E3E6] dark:border-slate-700">
               <BadgeCheck className="w-4 h-4 text-[#079669] shrink-0 mt-0.5" />
               <span>
-                All new profile photos undergo human moderation to safeguard the community against explicit or inappropriate imagery.
+                All new profile photos undergo moderation to safeguard the community against explicit or inappropriate imagery. Max 5MB per image.
               </span>
             </div>
           </div>
@@ -286,6 +507,15 @@ export const Onboarding: React.FC = () => {
               </p>
             </div>
 
+            <input
+              type="file"
+              ref={selfieInputRef}
+              onChange={handleSelfieUpload}
+              accept="image/jpeg,image/png,image/webp"
+              capture="user"
+              className="hidden"
+            />
+
             <div className="p-6 bg-[#FFF9F5] dark:bg-slate-800/60 rounded-3xl border border-[#F0E3E6] dark:border-slate-700 text-center">
               <div className="w-32 h-32 rounded-3xl mx-auto overflow-hidden border-2 border-emerald-500 shadow-xs mb-4 bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
                 {selfieUrl ? (
@@ -299,24 +529,33 @@ export const Onboarding: React.FC = () => {
                 <p className="text-xs font-semibold text-[#15182B] dark:text-slate-200">
                   Pose Prompt: Two-finger gesture verification next to your chin
                 </p>
-                <p className="text-[11px] text-[#667085] mt-0.5">
+                <p className="text-[11px] text-[#667085] dark:text-slate-400 mt-0.5">
                   This proves your photo is live and matches your profile gallery.
                 </p>
               </div>
 
-              {!selfieTaken ? (
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => selfieInputRef.current?.click()}
+                  className="px-4 py-2.5 rounded-xl bg-[#079669] hover:bg-[#065F46] text-white font-semibold text-xs shadow-xs flex items-center justify-center gap-2 transition-colors"
+                >
+                  <Camera className="w-4 h-4" />
+                  <span>Upload / Snap Selfie</span>
+                </button>
                 <button
                   type="button"
                   onClick={handleMockSelfie}
-                  className="px-5 py-2.5 rounded-xl bg-[#079669] hover:bg-[#065F46] text-white font-semibold text-xs shadow-xs flex items-center justify-center gap-2 mx-auto transition-colors"
+                  className="px-3 py-2.5 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-medium text-xs hover:bg-slate-300 transition-colors"
                 >
-                  <Camera className="w-4 h-4" />
-                  <span>Snap Verification Selfie</span>
+                  Use Demo Selfie
                 </button>
-              ) : (
-                <div className="inline-flex items-center gap-2 text-xs font-semibold text-[#065F46] bg-[#ECFDF5] px-3 py-1.5 rounded-full border border-[#A7F3D0]">
+              </div>
+
+              {selfieTaken && (
+                <div className="inline-flex items-center gap-2 text-xs font-semibold text-[#065F46] bg-[#ECFDF5] px-3 py-1.5 rounded-full border border-[#A7F3D0] mt-4">
                   <Check className="w-4 h-4 text-[#079669]" />
-                  <span>Selfie Captured & Ready for Admin Review</span>
+                  <span>Selfie Captured &amp; Ready for Verification</span>
                 </div>
               )}
             </div>
@@ -334,7 +573,7 @@ export const Onboarding: React.FC = () => {
               <h2 className="font-heading text-2xl font-bold text-[#15182B] dark:text-white">
                 {t.onboarding_step_prompts}
               </h2>
-              <p className="text-xs text-[#667085] mt-1">
+              <p className="text-xs text-[#667085] dark:text-slate-400 mt-1">
                 Conversation starters eliminate blank chat boxes and awkward "heys".
               </p>
             </div>
@@ -353,7 +592,7 @@ export const Onboarding: React.FC = () => {
                       onClick={() => handleInterestToggle(interest)}
                       className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
                         isSelected
-                          ? 'border-[#F20D4E] bg-[#FFF0F3] text-[#D80B42] shadow-xs'
+                          ? 'border-[#F20D4E] bg-[#FFF0F3] dark:bg-rose-950/40 text-[#D80B42] dark:text-rose-300 shadow-xs'
                           : 'border-[#F0E3E6] dark:border-slate-700 text-[#667085] dark:text-slate-300 hover:border-[#F8B4C4]'
                       }`}
                     >
@@ -399,8 +638,12 @@ export const Onboarding: React.FC = () => {
           {step > 1 ? (
             <button
               type="button"
-              onClick={() => setStep(step - 1)}
-              className="py-2.5 px-4 rounded-xl btn-secondary-surface text-xs font-semibold flex items-center gap-1.5"
+              disabled={saving}
+              onClick={() => {
+                setStepError('');
+                setStep(step - 1);
+              }}
+              className="py-2.5 px-4 rounded-xl btn-secondary-surface text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               <span>Back</span>
@@ -411,11 +654,21 @@ export const Onboarding: React.FC = () => {
 
           <button
             type="button"
+            disabled={saving || (step === 5 && offline)}
             onClick={handleNext}
-            className="py-2.5 px-6 btn-primary-rose text-xs font-semibold flex items-center gap-2"
+            className="py-2.5 px-6 btn-primary-rose text-xs font-semibold flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            <span>{step === 5 ? 'Finish & Start Matching' : 'Continue'}</span>
-            <ArrowRight className="w-3.5 h-3.5" />
+            {saving ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Saving Profile...</span>
+              </>
+            ) : (
+              <>
+                <span>{step === 5 ? 'Finish & Start Matching' : 'Continue'}</span>
+                <ArrowRight className="w-4 h-4" />
+              </>
+            )}
           </button>
         </div>
       </div>

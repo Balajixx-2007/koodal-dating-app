@@ -11,6 +11,8 @@ import {
 } from '../mockData';
 import { Language, translations } from '../translations';
 import confetti from 'canvas-confetti';
+import { supabase } from '../lib/supabase';
+import { resolveUserRole } from '../lib/auth-service';
 
 interface AppContextType {
   language: Language;
@@ -109,6 +111,100 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function initAuth() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user && isMounted) {
+          const userId = session.user.id;
+          const serverRole = await resolveUserRole(userId);
+          setActiveRole(serverRole);
+          setCurrentUser({
+            id: userId,
+            email: session.user.email || '',
+            role: serverRole,
+            status: 'active',
+            createdAt: session.user.created_at || new Date().toISOString()
+          });
+
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('user_id', userId)
+            .maybeSingle();
+
+          if (profile && isMounted) {
+            setMyProfile(prev => ({
+              ...prev,
+              userId: profile.user_id,
+              name: profile.name,
+              birthDate: profile.birth_date,
+              gender: profile.gender,
+              intent: profile.intent,
+              city: profile.city,
+              bio: profile.bio,
+              interests: profile.interests || [],
+              prompts: (profile.prompts as any) || [],
+              isPaused: profile.is_paused
+            }));
+          }
+        }
+      } catch {
+        // Fallback for tests or unauthenticated session
+      }
+    }
+
+    initAuth();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!isMounted) return;
+      if (session?.user && (event === 'SIGNED_IN' || event === 'USER_UPDATED')) {
+        const userId = session.user.id;
+        const serverRole = await resolveUserRole(userId);
+        setActiveRole(serverRole);
+        setCurrentUser({
+          id: userId,
+          email: session.user.email || '',
+          role: serverRole,
+          status: 'active',
+          createdAt: session.user.created_at || new Date().toISOString()
+        });
+
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+        if (profile && isMounted) {
+          setMyProfile(prev => ({
+            ...prev,
+            userId: profile.user_id,
+            name: profile.name,
+            birthDate: profile.birth_date,
+            gender: profile.gender,
+            intent: profile.intent,
+            city: profile.city,
+            bio: profile.bio,
+            interests: profile.interests || [],
+            prompts: (profile.prompts as any) || [],
+            isPaused: profile.is_paused
+          }));
+        }
+      } else if (event === 'SIGNED_OUT') {
+        setCurrentUser(null);
+        setActiveRole('visitor');
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const [currentUser, setCurrentUser] = useState<User | null>(INITIAL_USER);
@@ -240,12 +336,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setMyProfile(prev => ({ ...prev, ...updated }));
   };
 
-  const deleteAccount = () => {
+  const deleteAccount = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch {
+      // ignore
+    }
     localStorage.clear();
     setCurrentUser(null);
     setMyProfile(INITIAL_MY_PROFILE);
     setMatches([]);
     setMessages({});
+    setActiveRole('visitor');
     navigateTo('/');
   };
 

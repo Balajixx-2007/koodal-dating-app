@@ -3,14 +3,8 @@ name: Supabase Database Tests
 on:
   push:
     branches: [ main ]
-    paths:
-      - 'supabase/**'
-      - '.github/workflows/supabase-test.yml'
   pull_request:
     branches: [ main ]
-    paths:
-      - 'supabase/**'
-      - '.github/workflows/supabase-test.yml'
   workflow_dispatch:
 
 jobs:
@@ -29,7 +23,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'npm'
 
       - name: Install dependencies
@@ -73,8 +67,11 @@ jobs:
           echo "=== 3. Supabase CLI test db (Full Suite: Phase 2 + Phase 3 + Step 1.5) ===" | tee -a pg_tap_output.txt
           supabase test db 2>&1 | tee -a pg_tap_output.txt
 
-      - name: Run Vitest database & formula tests
+      - name: Run Vitest test suite
         run: npm test
+
+      - name: Type check and production build
+        run: npm run build
 
       - name: Publish execution logs to repository
         if: always()
