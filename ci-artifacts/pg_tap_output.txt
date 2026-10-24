@@ -198,15 +198,15 @@ dcccee43ad5d: Pulling fs layer
 a22cb17b3b93: Pulling fs layer
 4f4fb700ef54: Pulling fs layer
 4f4fb700ef54: Waiting
-a22cb17b3b93: Verifying Checksum
-a22cb17b3b93: Download complete
 dcccee43ad5d: Verifying Checksum
 dcccee43ad5d: Download complete
+a22cb17b3b93: Verifying Checksum
+a22cb17b3b93: Download complete
+dcccee43ad5d: Pull complete
 06d62d0de6d7: Verifying Checksum
 06d62d0de6d7: Download complete
 4f4fb700ef54: Verifying Checksum
 4f4fb700ef54: Download complete
-dcccee43ad5d: Pull complete
 06d62d0de6d7: Pull complete
 a22cb17b3b93: Pull complete
 4f4fb700ef54: Pull complete
@@ -220,5 +220,5 @@ psql:/home/runner/work/koodal-dating-app/koodal-dating-app/supabase/tests/phase3
 psql:/home/runner/work/koodal-dating-app/koodal-dating-app/supabase/tests/step1_5_read_functions.sql:2: NOTICE:  extension "pgtap" already exists, skipping
 /home/runner/work/koodal-dating-app/koodal-dating-app/supabase/tests/step1_5_read_functions.sql ............ ok
 All tests successful.
-Files=3, Tests=112,  1 wallclock secs ( 0.03 usr  0.02 sys +  0.03 cusr  0.02 csys =  0.10 CPU)
+Files=3, Tests=112,  0 wallclock secs ( 0.02 usr  0.01 sys +  0.02 cusr  0.01 csys =  0.06 CPU)
 Result: PASS
