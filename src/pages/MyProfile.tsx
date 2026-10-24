@@ -21,32 +21,42 @@ export const MyProfile: React.FC = () => {
   const [prompt1, setPrompt1] = useState(myProfile.prompts[0]?.answer || '');
   const [prompt2, setPrompt2] = useState(myProfile.prompts[1]?.answer || '');
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    updateMyProfile({
-      name,
-      bio,
-      city,
-      intent,
-      occupation,
-      education,
-      prompts: [
-        {
-          id: 'p1',
-          question: 'A non-negotiable for me in a relationship is...',
-          answer: prompt1
-        },
-        {
-          id: 'p2',
-          question: 'My ideal Sunday in Chennai looks like...',
-          answer: prompt2
-        }
-      ]
-    });
-    setEditing(false);
-    setSaveSuccess(true);
-    setTimeout(() => setSaveSuccess(false), 3000);
+    setSaveError(null);
+    setIsSaving(true);
+    try {
+      await updateMyProfile({
+        name,
+        bio,
+        city,
+        intent,
+        occupation,
+        education,
+        prompts: [
+          {
+            id: 'p1',
+            question: 'A non-negotiable for me in a relationship is...',
+            answer: prompt1
+          },
+          {
+            id: 'p2',
+            question: 'My ideal Sunday in Chennai looks like...',
+            answer: prompt2
+          }
+        ]
+      });
+      setEditing(false);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (err: any) {
+      setSaveError(err.message || 'Failed to save changes. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const intents: RelationshipIntent[] = ['casual', 'long_term', 'marriage', 'friendship'];
