@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { 
   User, Profile, RelationshipIntent, Match, Message, Report, 
   SelfieVerification, PhotoModerationItem, WaitlistEntry, AdmissionBatch 
@@ -13,6 +13,7 @@ import { Language, translations } from '../translations';
 import confetti from 'canvas-confetti';
 import { supabase } from '../lib/supabase';
 import { resolveUserRole } from '../lib/auth-service';
+import { DiscoveryService } from '../lib/discovery-service';
 
 interface AppContextType {
   language: Language;
@@ -34,9 +35,14 @@ interface AppContextType {
   
   // Discovery & Matching
   discoverableProfiles: Profile[];
+  isLoadingDiscovery: boolean;
+  discoveryError: string | null;
+  refreshDiscovery: () => Promise<void>;
+  likeLimitNotice: boolean;
+  clearLikeLimitNotice: () => void;
   activeIntentFilter: RelationshipIntent | 'all';
   setActiveIntentFilter: (filter: RelationshipIntent | 'all') => void;
-  likeProfile: (profile: Profile) => void;
+  likeProfile: (profile: Profile) => Promise<void>;
   passProfile: (profileId: string) => void;
   matchMoment: Profile | null;
   setMatchMoment: (profile: Profile | null) => void;
@@ -224,6 +230,60 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [activeIntentFilter, setActiveIntentFilter] = useState<RelationshipIntent | 'all'>('all');
   const [matchMoment, setMatchMoment] = useState<Profile | null>(null);
 
+  const [isLoadingDiscovery, setIsLoadingDiscovery] = useState(false);
+  const [discoveryError, setDiscoveryError] = useState<string | null>(null);
+  const [likeLimitNotice, setLikeLimitNotice] = useState(false);
+  const clearLikeLimitNotice = () => setLikeLimitNotice(false);
+
+  const refreshDiscovery = useCallback(async () => {
+    setIsLoadingDiscovery(true);
+    setDiscoveryError(null);
+    try {
+      const result = await DiscoveryService.fetchFeed();
+      if (!result.success) {
+        if (result.offline) {
+          setDiscoveryError('You are offline. Showing cached discovery candidates.');
+        } else {
+          setDiscoveryError(result.error || 'Failed to refresh discovery feed.');
+        }
+        setIsLoadingDiscovery(false);
+        return;
+      }
+
+      if (result.profiles.length > 0) {
+        const mapped: Profile[] = result.profiles.map(p => ({
+          id: p.user_id,
+          userId: p.user_id,
+          name: p.name,
+          age: p.age,
+          city: p.city,
+          gender: 'other',
+          intent: p.intent,
+          bio: p.bio,
+          bioTa: p.bio_ta || undefined,
+          photos: p.photos.length > 0 ? p.photos : ['https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80'],
+          verificationStatus: 'verified',
+          interests: p.interests,
+          prompts: (p.prompts || []).map((pr, idx) => ({
+            id: pr.id || `prompt_${idx}`,
+            question: pr.question,
+            questionTa: pr.questionTa,
+            answer: pr.answer
+          }))
+        }));
+        setProfiles(mapped);
+      }
+    } catch (err: any) {
+      setDiscoveryError(err.message || 'Error loading discovery candidates.');
+    } finally {
+      setIsLoadingDiscovery(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshDiscovery();
+  }, [refreshDiscovery]);
+
   const [matches, setMatches] = useState<Match[]>(() => {
     const saved = localStorage.getItem('koodal_matches');
     return saved ? JSON.parse(saved) : INITIAL_MATCHES;
@@ -362,37 +422,68 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return true;
   });
 
-  const likeProfile = (profile: Profile) => {
-    setLikedIds(prev => [...prev, profile.id]);
+  const likeProfile = async (profile: Profile) => {
+    if (currentUser?.id) {
+      const result = await DiscoveryService.likeProfile(currentUser.id, profile.userId);
+      if (!result.success && result.limitReached) {
+        setLikeLimitNotice(true);
+        return;
+      }
 
-    // Check mutual match condition: if intents are compatible, celebrate match!
-    const isCompatible = profile.intent === myProfile.intent || activeIntentFilter === 'all';
-    if (isCompatible) {
-      // Trigger confetti celebration!
-      confetti({
-        particleCount: 80,
-        spread: 70,
-        origin: { y: 0.6 }
-      });
+      setLikedIds(prev => [...prev, profile.id]);
 
-      const newMatch: Match = {
-        id: `match_${Date.now()}`,
-        userA: currentUser?.id || 'usr_me_01',
-        userB: profile.userId,
-        createdAt: new Date().toISOString(),
-        matchedProfile: profile,
-        lastMessage: 'You matched! Say hello.',
-        lastMessageTime: 'Just now',
-        unreadCount: 0
-      };
+      if (result.isMatch) {
+        confetti({
+          particleCount: 80,
+          spread: 70,
+          origin: { y: 0.6 }
+        });
 
-      setMatches(prev => [newMatch, ...prev]);
-      setMatchMoment(profile);
+        const newMatch: Match = {
+          id: result.match?.id || `match_${Date.now()}`,
+          userA: currentUser.id,
+          userB: profile.userId,
+          createdAt: result.match?.created_at || new Date().toISOString(),
+          matchedProfile: profile,
+          lastMessage: 'You matched! Say hello.',
+          lastMessageTime: 'Just now',
+          unreadCount: 0
+        };
+
+        setMatches(prev => [newMatch, ...prev]);
+        setMatchMoment(profile);
+      }
+    } else {
+      setLikedIds(prev => [...prev, profile.id]);
+      const isCompatible = profile.intent === myProfile.intent || activeIntentFilter === 'all';
+      if (isCompatible) {
+        confetti({
+          particleCount: 80,
+          spread: 70,
+          origin: { y: 0.6 }
+        });
+        const newMatch: Match = {
+          id: `match_${Date.now()}`,
+          userA: 'usr_me_01',
+          userB: profile.userId,
+          createdAt: new Date().toISOString(),
+          matchedProfile: profile,
+          lastMessage: 'You matched! Say hello.',
+          lastMessageTime: 'Just now',
+          unreadCount: 0
+        };
+        setMatches(prev => [newMatch, ...prev]);
+        setMatchMoment(profile);
+      }
     }
   };
 
   const passProfile = (profileId: string) => {
     setPassedIds(prev => [...prev, profileId]);
+    const target = profiles.find(p => p.id === profileId);
+    if (currentUser?.id && target) {
+      DiscoveryService.passProfile(currentUser.id, target.userId).catch(() => {});
+    }
   };
 
   const sendMessage = (matchId: string, body: string) => {
@@ -706,6 +797,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateMyProfile,
         deleteAccount,
         discoverableProfiles,
+        isLoadingDiscovery,
+        discoveryError,
+        refreshDiscovery,
+        likeLimitNotice,
+        clearLikeLimitNotice,
         activeIntentFilter,
         setActiveIntentFilter,
         likeProfile,

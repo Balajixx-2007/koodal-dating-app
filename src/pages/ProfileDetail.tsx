@@ -1,13 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { IntentBadge } from '../components/IntentBadge';
 import { VerifiedBadge } from '../components/VerifiedBadge';
 import { ReportBlockModal } from '../components/ReportBlockModal';
 import { 
   ArrowLeft, MapPin, Briefcase, GraduationCap, 
-  ShieldAlert, Heart, X, MessageCircle, ShieldCheck, BadgeCheck 
+  ShieldAlert, Heart, X, MessageCircle, ShieldCheck, BadgeCheck, Loader2 
 } from 'lucide-react';
 import { Profile } from '../types';
+import { DiscoveryService } from '../lib/discovery-service';
 
 interface ProfileDetailProps {
   profileId?: string;
@@ -26,30 +27,103 @@ export const ProfileDetail: React.FC<ProfileDetailProps> = ({ profileId }) => {
   } = useApp();
 
   const [reporting, setReporting] = useState(false);
+  const [remoteProfile, setRemoteProfile] = useState<Profile | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [notFound, setNotFound] = useState(false);
 
   const id = profileId || viewParam || (currentView.startsWith('/profile/') ? currentView.replace('/profile/', '') : undefined);
 
-  // Search in discoverable profiles or matches
-  const profile: Profile | undefined = 
-    discoverableProfiles.find(p => p.id === id) || 
-    matches.find(m => m.matchedProfile.id === id)?.matchedProfile ||
-    (id === myProfile.id ? myProfile : discoverableProfiles[0]);
+  // Search in discoverable profiles, matches, or remote fetch
+  const localProfile: Profile | undefined = 
+    discoverableProfiles.find(p => p.id === id || p.userId === id) || 
+    matches.find(m => m.matchedProfile.id === id || m.matchedProfile.userId === id)?.matchedProfile ||
+    (id === myProfile.id || id === myProfile.userId ? myProfile : undefined);
 
-  if (!profile) {
+  useEffect(() => {
+    if (!id || localProfile) return;
+
+    let isMounted = true;
+    setLoading(true);
+    setNotFound(false);
+
+    DiscoveryService.getMemberProfile(id)
+      .then((res) => {
+        if (!isMounted) return;
+        setLoading(false);
+        if (res) {
+          setRemoteProfile({
+            id: res.user_id,
+            userId: res.user_id,
+            name: res.name,
+            age: res.age,
+            city: res.city,
+            gender: 'other',
+            intent: res.intent,
+            bio: res.bio,
+            bioTa: res.bio_ta || undefined,
+            photos: res.photos && res.photos.length > 0 
+              ? res.photos 
+              : ['https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80'],
+            verificationStatus: 'verified',
+            interests: res.interests || [],
+            prompts: (res.prompts || []).map((pr, idx) => ({
+              id: pr.id || `prompt_${idx}`,
+              question: pr.question,
+              questionTa: pr.questionTa,
+              answer: pr.answer
+            }))
+          });
+        } else {
+          setNotFound(true);
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setLoading(false);
+          setNotFound(true);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [id, localProfile]);
+
+  const profile = localProfile || remoteProfile;
+
+  if (loading) {
     return (
-      <div className="max-w-md mx-auto px-4 py-12 text-center">
-        <p className="text-sm text-[#667085]">Profile not found.</p>
+      <div className="max-w-md mx-auto px-4 py-24 text-center">
+        <Loader2 className="w-8 h-8 animate-spin text-[#F20D4E] mx-auto mb-3" />
+        <p className="text-xs font-semibold text-[#15182B] dark:text-white">Loading member profile...</p>
+      </div>
+    );
+  }
+
+  if (notFound || !profile) {
+    return (
+      <div className="max-w-md mx-auto px-4 py-16 text-center space-y-4">
+        <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto">
+          <ShieldAlert className="w-6 h-6" />
+        </div>
+        <div>
+          <h3 className="font-heading text-lg font-bold text-[#15182B] dark:text-white">Profile Unavailable</h3>
+          <p className="text-xs text-[#667085] dark:text-slate-400 mt-1 max-w-xs mx-auto">
+            This profile is private, paused, or no longer accessible in your area.
+          </p>
+        </div>
         <button
           onClick={() => navigateTo('/discover')}
-          className="mt-4 px-4 py-2 btn-primary-rose text-xs"
+          className="px-5 py-2.5 btn-primary-rose text-xs font-semibold inline-flex items-center gap-1.5"
         >
-          Return to Discovery
+          <ArrowLeft className="w-4 h-4" />
+          <span>Return to Discovery</span>
         </button>
       </div>
     );
   }
 
-  const isMatched = matches.some(m => m.matchedProfile.id === profile.id);
+  const isMatched = matches.some(m => m.matchedProfile.id === profile.id || m.matchedProfile.userId === profile.userId);
 
   return (
     <div className="max-w-xl mx-auto px-4 py-6 space-y-6">
@@ -80,13 +154,13 @@ export const ProfileDetail: React.FC<ProfileDetailProps> = ({ profileId }) => {
         {/* Photo Gallery Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {profile.photos.map((url, idx) => (
-            <div key={idx} className="aspect-[3/4] rounded-2xl overflow-hidden border border-[#F0E3E6] shadow-xs">
+            <div key={idx} className="aspect-[3/4] rounded-2xl overflow-hidden border border-[#F0E3E6] dark:border-slate-800 shadow-xs">
               <img src={url} alt={`${profile.name} photo ${idx + 1}`} className="w-full h-full object-cover" />
             </div>
           ))}
         </div>
 
-        {/* Identity & Badges */}
+        {/* Identity & Badges (Same-city only: distance removed per spec) */}
         <div className="border-b border-[#F0E3E6] dark:border-slate-800 pb-5">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
             <h2 className="font-heading text-3xl font-extrabold text-[#15182B] dark:text-white">
@@ -95,13 +169,11 @@ export const ProfileDetail: React.FC<ProfileDetailProps> = ({ profileId }) => {
             <VerifiedBadge size="md" />
           </div>
 
-          <div className="flex items-center gap-3 text-xs text-[#667085] mb-4">
+          <div className="flex items-center gap-3 text-xs text-[#667085] dark:text-slate-400 mb-4">
             <span className="flex items-center gap-1">
               <MapPin className="w-3.5 h-3.5 text-[#F20D4E]" />
               <span>{profile.city}</span>
             </span>
-            <span>&bull;</span>
-            <span>~{profile.distanceKm} km away (approximate)</span>
           </div>
 
           <div className="pt-1">
@@ -128,47 +200,55 @@ export const ProfileDetail: React.FC<ProfileDetailProps> = ({ profileId }) => {
         </div>
 
         {/* Occupation & Education */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-[#FFF9F5] dark:bg-slate-800/60 p-4 rounded-2xl border border-[#F0E3E6] dark:border-slate-700">
-          <div className="flex items-center gap-2 text-xs text-[#15182B] dark:text-slate-300">
-            <Briefcase className="w-4 h-4 text-[#98A2B3]" />
-            <span>{profile.occupation || 'Professional'}</span>
+        {(profile.occupation || profile.education) && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-[#FFF9F5] dark:bg-slate-800/60 p-4 rounded-2xl border border-[#F0E3E6] dark:border-slate-700">
+            {profile.occupation && (
+              <div className="flex items-center gap-2 text-xs text-[#15182B] dark:text-slate-300">
+                <Briefcase className="w-4 h-4 text-[#98A2B3]" />
+                <span>{profile.occupation}</span>
+              </div>
+            )}
+            {profile.education && (
+              <div className="flex items-center gap-2 text-xs text-[#15182B] dark:text-slate-300">
+                <GraduationCap className="w-4 h-4 text-[#98A2B3]" />
+                <span>{profile.education}</span>
+              </div>
+            )}
           </div>
-          <div className="flex items-center gap-2 text-xs text-[#15182B] dark:text-slate-300">
-            <GraduationCap className="w-4 h-4 text-[#98A2B3]" />
-            <span>{profile.education || 'University Graduate'}</span>
-          </div>
-        </div>
+        )}
 
         {/* Prompts */}
-        <div className="space-y-3">
-          <span className="text-[11px] font-bold text-[#98A2B3] uppercase tracking-wider block">
-            Conversation Prompts
-          </span>
-          {profile.prompts.map((p) => (
-            <div 
-              key={p.id}
-              className="p-4 rounded-2xl bg-[#FFF9F5] dark:bg-slate-800 border border-[#F0E3E6] dark:border-slate-700"
-            >
-              <span className="text-xs font-semibold text-[#D80B42] dark:text-rose-400 block mb-1">
-                {p.question}
-              </span>
-              <p className="text-xs sm:text-sm text-[#15182B] dark:text-slate-200 font-medium leading-relaxed">
-                "{p.answer}"
-              </p>
-            </div>
-          ))}
-        </div>
+        {profile.prompts && profile.prompts.length > 0 && (
+          <div className="space-y-3">
+            <span className="text-[11px] font-bold text-[#98A2B3] uppercase tracking-wider block">
+              Conversation Prompts
+            </span>
+            {profile.prompts.map((p) => (
+              <div 
+                key={p.id}
+                className="p-4 rounded-2xl bg-[#FFF9F5] dark:bg-slate-800 border border-[#F0E3E6] dark:border-slate-700"
+              >
+                <span className="text-xs font-semibold text-[#D80B42] dark:text-rose-400 block mb-1">
+                  {p.question}
+                </span>
+                <p className="text-xs sm:text-sm text-[#15182B] dark:text-slate-200 font-medium leading-relaxed">
+                  "{p.answer}"
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Interests */}
         <div>
           <span className="text-[11px] font-bold text-[#98A2B3] uppercase tracking-wider block mb-2">
-            Interests & Passions
+            Interests &amp; Passions
           </span>
           <div className="flex flex-wrap gap-2">
             {profile.interests.map((interest) => (
               <span
                 key={interest}
-                className="px-3 py-1.5 rounded-full text-xs font-medium bg-[#FFF0F3] dark:bg-slate-800 text-[#D80B42] dark:text-rose-300 border border-[#F8B4C4]/50"
+                className="px-3 py-1.5 rounded-full text-xs font-medium bg-[#FFF0F3] dark:bg-slate-800 text-[#D80B42] dark:text-rose-300 border border-[#F8B4C4]/50 dark:border-slate-700"
               >
                 {interest}
               </span>
@@ -193,7 +273,7 @@ export const ProfileDetail: React.FC<ProfileDetailProps> = ({ profileId }) => {
         {isMatched ? (
           <button
             onClick={() => {
-              const m = matches.find(item => item.matchedProfile.id === profile.id);
+              const m = matches.find(item => item.matchedProfile.id === profile.id || item.matchedProfile.userId === profile.userId);
               if (m) navigateTo(`/chat/${m.id}`);
             }}
             className="flex-1 py-3 px-6 btn-primary-rose text-xs flex items-center justify-center gap-2"
@@ -214,8 +294,8 @@ export const ProfileDetail: React.FC<ProfileDetailProps> = ({ profileId }) => {
               <span>Pass</span>
             </button>
             <button
-              onClick={() => {
-                likeProfile(profile);
+              onClick={async () => {
+                await likeProfile(profile);
                 navigateTo('/discover');
               }}
               className="flex-1 py-3 px-6 btn-primary-rose text-xs flex items-center justify-center gap-1.5"

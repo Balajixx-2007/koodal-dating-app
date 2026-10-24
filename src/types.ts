@@ -35,7 +35,7 @@ export interface Profile {
   bio: string;
   bioTa?: string;
   city: string;
-  distanceKm: number;
+  distanceKm?: number;
   photos: string[];
   selfieUrl?: string;
   verificationStatus: VerificationStatus;
