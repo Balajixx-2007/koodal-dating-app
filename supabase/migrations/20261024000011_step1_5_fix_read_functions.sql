@@ -230,19 +230,15 @@ DECLARE
     v_caller_id UUID := auth.uid();
     v_caller_city TEXT;
     v_caller_intent relationship_intent;
-    v_caller_gender TEXT;
-    v_pref_gender TEXT[];
-    v_pref_intent relationship_intent[];
-    v_min_age INT;
-    v_max_age INT;
+    v_pref_intents relationship_intent[];
 BEGIN
     IF v_caller_id IS NULL THEN
         RAISE EXCEPTION 'Not authenticated' USING ERRCODE = '42501';
     END IF;
 
     -- Fetch caller city and profile metadata
-    SELECT p.city, p.intent, p.gender
-    INTO v_caller_city, v_caller_intent, v_caller_gender
+    SELECT p.city, p.intent
+    INTO v_caller_city, v_caller_intent
     FROM public.profiles p
     WHERE p.user_id = v_caller_id;
 
@@ -250,9 +246,8 @@ BEGIN
         RETURN;
     END IF;
 
-    -- Fetch caller preferences if set
-    SELECT pref.preferred_genders, pref.preferred_intents, pref.min_age, pref.max_age
-    INTO v_pref_gender, v_pref_intent, v_min_age, v_max_age
+    -- Fetch caller preference intent filter if present
+    SELECT pref.intent_filter INTO v_pref_intents
     FROM public.preferences pref
     WHERE pref.user_id = v_caller_id;
 
@@ -289,12 +284,7 @@ BEGIN
           WHERE ps.user_id = v_caller_id AND ps.target_id = p.user_id
       )
       -- Intent compatibility
-      AND (v_pref_intent IS NULL OR p.intent = ANY(v_pref_intent))
-      -- Gender preference
-      AND (v_pref_gender IS NULL OR p.gender = ANY(v_pref_gender))
-      -- Age range preference
-      AND (v_min_age IS NULL OR date_part('year', age(p.birth_date)) >= v_min_age)
-      AND (v_max_age IS NULL OR date_part('year', age(p.birth_date)) <= v_max_age)
+      AND (v_pref_intents IS NULL OR p.intent = ANY(v_pref_intents))
     ORDER BY p.updated_at DESC, p.user_id ASC
     LIMIT p_limit OFFSET p_offset;
 END;

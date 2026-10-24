@@ -5,6 +5,15 @@ SELECT plan(33);
 -- ==============================================================================
 -- Fixtures & Seed Data for Step 1.5 Read Functions
 -- ==============================================================================
+-- Seed Admin
+INSERT INTO auth.users (id, email, email_confirmed_at)
+VALUES ('00000000-0000-0000-0000-000000000001', 'admin@example.com', NOW())
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.admins (user_id, role)
+VALUES ('00000000-0000-0000-0000-000000000001', 'superadmin')
+ON CONFLICT (user_id) DO NOTHING;
+
 -- Seed Users
 INSERT INTO auth.users (id, email, email_confirmed_at)
 VALUES 
@@ -41,15 +50,22 @@ ON CONFLICT (user_id) DO UPDATE SET
     is_paused = EXCLUDED.is_paused;
 
 -- Waitlist
-INSERT INTO public.waitlist_entries (user_id, email, city, gender, intent, status)
+INSERT INTO public.waitlist_entries (user_id, email, city, gender, intent, lane, status)
 VALUES 
-    ('11111111-2222-3333-4444-000000000001', 'viewer_1@example.com', 'Chennai', 'man', 'long_term', 'admitted'),
-    ('11111111-2222-3333-4444-000000000002', 'target_eligible@example.com', 'Chennai', 'woman', 'long_term', 'admitted'),
-    ('11111111-2222-3333-4444-000000000003', 'target_blocked@example.com', 'Chennai', 'woman', 'long_term', 'admitted'),
-    ('11111111-2222-3333-4444-000000000004', 'target_matched@example.com', 'Chennai', 'woman', 'long_term', 'admitted'),
-    ('11111111-2222-3333-4444-000000000005', 'target_banned@example.com', 'Chennai', 'woman', 'long_term', 'admitted'),
-    ('11111111-2222-3333-4444-000000000006', 'target_suspended@example.com', 'Chennai', 'woman', 'long_term', 'admitted')
-ON CONFLICT (email) DO UPDATE SET status = 'admitted';
+    ('11111111-2222-3333-4444-000000000001', 'viewer_1@example.com', 'Chennai', 'man', 'long_term', 'men', 'waiting'),
+    ('11111111-2222-3333-4444-000000000002', 'target_eligible@example.com', 'Chennai', 'woman', 'long_term', 'women_and_others', 'waiting'),
+    ('11111111-2222-3333-4444-000000000003', 'target_blocked@example.com', 'Chennai', 'woman', 'long_term', 'women_and_others', 'waiting'),
+    ('11111111-2222-3333-4444-000000000004', 'target_matched@example.com', 'Chennai', 'woman', 'long_term', 'women_and_others', 'waiting'),
+    ('11111111-2222-3333-4444-000000000005', 'target_banned@example.com', 'Chennai', 'woman', 'long_term', 'women_and_others', 'waiting'),
+    ('11111111-2222-3333-4444-000000000006', 'target_suspended@example.com', 'Chennai', 'woman', 'long_term', 'women_and_others', 'waiting')
+ON CONFLICT (email) DO NOTHING;
+
+-- Mark waitlist as admitted under admin authority
+SET LOCAL ROLE authenticated;
+SET LOCAL "request.jwt.claim.sub" TO '00000000-0000-0000-0000-000000000001';
+SET LOCAL "request.jwt.claim.email" TO 'admin@example.com';
+UPDATE public.waitlist_entries SET status = 'admitted';
+RESET ROLE;
 
 -- Verifications (Selfies approved)
 INSERT INTO public.verifications (user_id, selfie_path, result)
@@ -133,7 +149,11 @@ SELECT is(
 
 -- 6: Unadmitted waitlist is not viewable
 SAVEPOINT sp_read;
+SET LOCAL ROLE authenticated;
+SET LOCAL "request.jwt.claim.sub" TO '00000000-0000-0000-0000-000000000001';
+SET LOCAL "request.jwt.claim.email" TO 'admin@example.com';
 UPDATE public.waitlist_entries SET status = 'waiting' WHERE user_id = '11111111-2222-3333-4444-000000000002';
+RESET ROLE;
 SELECT is(
     public.can_view_member('11111111-2222-3333-4444-000000000001', '11111111-2222-3333-4444-000000000002'),
     FALSE,
@@ -153,7 +173,11 @@ ROLLBACK TO sp_read;
 
 -- 8: No approved photo is not viewable
 SAVEPOINT sp_read;
+SET LOCAL ROLE authenticated;
+SET LOCAL "request.jwt.claim.sub" TO '00000000-0000-0000-0000-000000000001';
+SET LOCAL "request.jwt.claim.email" TO 'admin@example.com';
 UPDATE public.profile_photos SET status = 'pending' WHERE owner = '11111111-2222-3333-4444-000000000002';
+RESET ROLE;
 SELECT is(
     public.can_view_member('11111111-2222-3333-4444-000000000001', '11111111-2222-3333-4444-000000000002'),
     FALSE,
@@ -373,7 +397,11 @@ ROLLBACK TO sp_read;
 -- 28: Excludes banned partner
 SAVEPOINT sp_read;
 RESET ROLE;
+SET LOCAL ROLE authenticated;
+SET LOCAL "request.jwt.claim.sub" TO '00000000-0000-0000-0000-000000000001';
+SET LOCAL "request.jwt.claim.email" TO 'admin@example.com';
 UPDATE public.users SET status = 'banned' WHERE id = '11111111-2222-3333-4444-000000000004';
+RESET ROLE;
 SET LOCAL ROLE authenticated;
 SET LOCAL "request.jwt.claim.sub" TO '11111111-2222-3333-4444-000000000001';
 SELECT is(
@@ -386,7 +414,11 @@ ROLLBACK TO sp_read;
 -- 29: Excludes suspended partner
 SAVEPOINT sp_read;
 RESET ROLE;
+SET LOCAL ROLE authenticated;
+SET LOCAL "request.jwt.claim.sub" TO '00000000-0000-0000-0000-000000000001';
+SET LOCAL "request.jwt.claim.email" TO 'admin@example.com';
 UPDATE public.users SET status = 'suspended' WHERE id = '11111111-2222-3333-4444-000000000004';
+RESET ROLE;
 SET LOCAL ROLE authenticated;
 SET LOCAL "request.jwt.claim.sub" TO '11111111-2222-3333-4444-000000000001';
 SELECT is(
