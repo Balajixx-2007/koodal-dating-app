@@ -265,6 +265,7 @@ PREPARE test_non_admin_audit AS
 
 SELECT throws_ok(
     'test_non_admin_audit',
+    '42501',
     '19. Non-admin cannot INSERT into public.audit_log'
 );
 
@@ -275,11 +276,8 @@ SET LOCAL ROLE authenticated;
 SET LOCAL "request.jwt.claim.sub" TO '11111111-1111-1111-1111-111111111111';
 SET LOCAL "request.jwt.claim.email" TO 'member_a@example.com';
 
-PREPARE test_non_admin_review_photo AS
-    SELECT public.review_photo('bbbbbbbb-0000-0000-0000-000000000002', 'approved');
-
 SELECT throws_ok(
-    'test_non_admin_review_photo',
+    'SELECT public.review_photo(''bbbbbbbb-0000-0000-0000-000000000002''::uuid, ''approved'')',
     '21. Non-admin cannot call review_photo admin function'
 );
 
@@ -306,32 +304,16 @@ SELECT ok(
 -- ==============================================================================
 -- Test 24 - 25: Blocked & Banned Message Restrictions (Rule 8)
 -- ==============================================================================
-PREPARE test_blocked_send_msg AS
-    INSERT INTO public.messages (match_id, sender_id, body)
-    VALUES (
-        (SELECT id FROM public.matches LIMIT 1),
-        '11111111-1111-1111-1111-111111111111',
-        'Blocked test message'
-    );
-
 SELECT throws_ok(
-    'test_blocked_send_msg',
+    'INSERT INTO public.messages (match_id, sender_id, body) VALUES ((SELECT id FROM public.matches LIMIT 1), ''11111111-1111-1111-1111-111111111111'', ''Blocked test message'')',
     '24. Blocked members cannot send messages to each other'
 );
 
 SET LOCAL "request.jwt.claim.sub" TO '88888888-8888-8888-8888-888888888888';
 SET LOCAL "request.jwt.claim.email" TO 'banned@example.com';
 
-PREPARE test_banned_send_msg AS
-    INSERT INTO public.messages (match_id, sender_id, body)
-    VALUES (
-        (SELECT id FROM public.matches LIMIT 1),
-        '88888888-8888-8888-8888-888888888888',
-        'Banned test message'
-    );
-
 SELECT throws_ok(
-    'test_banned_send_msg',
+    'INSERT INTO public.messages (match_id, sender_id, body) VALUES ((SELECT id FROM public.matches LIMIT 1), ''88888888-8888-8888-8888-888888888888'', ''Banned test message'')',
     '25. Banned user cannot send messages'
 );
 
