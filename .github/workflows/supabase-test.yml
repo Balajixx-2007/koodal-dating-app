@@ -40,16 +40,15 @@ jobs:
 
       - name: Run Supabase pgTAP database tests
         run: |
-          echo "=== 1. Raw TAP Stream (1..N) ==="
-          docker exec -i $(docker ps --filter "name=supabase_db_" --format "{{.ID}}") psql -U postgres -d postgres -X -q -t -A < supabase/tests/database_security_and_admissions.sql > tap_stream.txt
-          cat tap_stream.txt
+          > pg_tap_output.txt
+          CONTAINER_ID=$(docker ps --filter "name=supabase_db_" --format "{{.ID}}")
+          for f in supabase/tests/*.sql; do
+            echo "=== TAP Stream: $f ===" | tee -a pg_tap_output.txt
+            docker exec -i "$CONTAINER_ID" psql -U postgres -d postgres -X -q -t -A < "$f" 2>&1 | tee -a pg_tap_output.txt || true
+          done
 
-          echo "=== 2. Supabase CLI test db ==="
-          supabase test db 2>&1 | tee cli_summary.txt
-
-          cat tap_stream.txt > pg_tap_output.txt
-          echo "" >> pg_tap_output.txt
-          cat cli_summary.txt >> pg_tap_output.txt
+          echo "=== Supabase CLI test db ===" | tee -a pg_tap_output.txt
+          supabase test db 2>&1 | tee -a pg_tap_output.txt
 
       - name: Run Vitest database & formula tests
         run: npm test
