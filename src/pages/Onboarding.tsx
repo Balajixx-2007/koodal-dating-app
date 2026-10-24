@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { validateBirthDateAge, ProfileService } from '../lib/auth-service';
 import { supabase, isOnline } from '../lib/supabase';
+import { StorageService } from '../lib/storage-service';
 
 export const Onboarding: React.FC = () => {
   const { t, myProfile, updateMyProfile, navigateTo, currentUser } = useApp();
@@ -219,16 +220,7 @@ export const Onboarding: React.FC = () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
-        const filePath = `${session.user.id}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
-        const { error: uploadError } = await supabase.storage.from('photos').upload(filePath, file);
-        if (!uploadError) {
-          await supabase.from('profile_photos').insert({
-            owner: session.user.id,
-            storage_path: filePath,
-            position: photos.length,
-            status: 'pending'
-          });
-        }
+        await StorageService.uploadProfilePhoto(session.user.id, file, photos.length);
       }
     } catch {
       // Non-blocking preview retained
@@ -253,15 +245,7 @@ export const Onboarding: React.FC = () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
-        const filePath = `${session.user.id}/selfie-${Date.now()}.jpg`;
-        const { error: uploadError } = await supabase.storage.from('selfies').upload(filePath, file);
-        if (!uploadError) {
-          await supabase.from('verifications').insert({
-            user_id: session.user.id,
-            selfie_path: filePath,
-            result: 'pending'
-          });
-        }
+        await StorageService.uploadVerificationSelfie(session.user.id, file);
       }
     } catch {
       // Non-blocking preview retained
