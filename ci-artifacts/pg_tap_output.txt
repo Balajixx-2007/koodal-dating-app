@@ -225,6 +225,7 @@ ERROR:  current transaction is aborted, commands ignored until end of transactio
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 
 === 2. GREEN STATE TAP OUTPUT (Tests against schema after Phase 3 migrations) ===
 1..65
@@ -257,74 +258,52 @@ ok 26 - 26. Normal eligible profile appears in discovery feed
 ok 27 - 27. Paused profile disappears from discovery feed
 ok 28 - 28. Banned user profile disappears from discovery feed
 ok 29 - 29. Suspended user profile disappears from discovery feed
-not ok 30 - 30. Unadmitted waitlist profile disappears from discovery feed
-# Failed test 30: "30. Unadmitted waitlist profile disappears from discovery feed"
+ok 30 - 30. Unadmitted waitlist profile disappears from discovery feed
+ok 31 - 31. Profile with unapproved selfie disappears from discovery feed
+ok 32 - 32. Profile with no approved photo disappears from discovery feed
+ok 33 - 33. Profile blocked by caller disappears from discovery feed
+ok 34 - 34. Profile blocking caller disappears from discovery feed
+ok 35 - 35. Already liked profile disappears from discovery feed
+ok 36 - 36. Already passed profile disappears from discovery feed
+ok 37 - 37. Different city profile disappears from discovery feed
+ok 38 - 38. Caller does not appear in own discovery feed
+ok 39 - 39. Another member cannot fetch a pending photo from public.profile_photos
+ok 40 - 40. Another member cannot fetch a rejected photo from public.profile_photos
+ok 41 - 41. Another member cannot fetch pending photo from storage.objects
+ok 42 - 42. Member cannot set their own photo status to approved
+ok 43 - 43. Member cannot upload under another member folder
+ok 44 - 44. Member cannot read another member selfie from storage.objects
+ok 45 - 45. Member can read own selfie from storage.objects
+ok 46 - 46. Admin can read any selfie from storage.objects
+ok 47 - 47. Member cannot insert a verification row with result approved
+ok 48 - 48. Member cannot change their own users.status
+ok 49 - 49. Member cannot insert reports as another reporter
+ok 50 - 50. Member cannot report themselves
+ok 51 - 51. Member cannot read other members reports
+ok 52 - 52. Passes are visible only to their owner
+ok 53 - 53. Non-participant cannot read messages in someone else match
+not ok 54 - 54. Non-participant cannot insert messages into someone else match
+# Failed test 54: "54. Non-participant cannot insert messages into someone else match"
+#       caught: P0002: Match not found
+#       wanted: 42501
+ok 55 - 55. Non-participant cannot call mark_messages_read on someone else match
+not ok 56 - 56. After a block, neither person can read old chat history (blocker view)
+# Failed test 56: "56. After a block, neither person can read old chat history (blocker view)"
 #         have: 1
 #         want: 0
-ok 31 - 31. Profile with unapproved selfie disappears from discovery feed
-ERROR:  Cannot modify photo review status
-CONTEXT:  PL/pgSQL function prevent_photo_status_tamper() line 4 at RAISE
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ok 32 - 33. Profile blocked by caller disappears from discovery feed
-ok 33 - 34. Profile blocking caller disappears from discovery feed
-ok 34 - 35. Already liked profile disappears from discovery feed
-ok 35 - 36. Already passed profile disappears from discovery feed
-ok 36 - 37. Different city profile disappears from discovery feed
-ok 37 - 38. Caller does not appear in own discovery feed
-ok 38 - 39. Another member cannot fetch a pending photo from public.profile_photos
-ok 39 - 40. Another member cannot fetch a rejected photo from public.profile_photos
-ok 40 - 41. Another member cannot fetch pending photo from storage.objects
-ok 41 - 42. Member cannot set their own photo status to approved
-ok 42 - 43. Member cannot upload under another member folder
-ok 43 - 44. Member cannot read another member selfie from storage.objects
-ok 44 - 45. Member can read own selfie from storage.objects
-ok 45 - 46. Admin can read any selfie from storage.objects
-ok 46 - 47. Member cannot insert a verification row with result approved
-ok 47 - 48. Member cannot change their own users.status
-ok 48 - 49. Member cannot insert reports as another reporter
-ok 49 - 50. Member cannot report themselves
-ok 50 - 51. Member cannot read other members reports
-ok 51 - 52. Passes are visible only to their owner
-ERROR:  Cannot send message: blocked by or blocking recipient
-CONTEXT:  PL/pgSQL function validate_message_insert() line 38 at RAISE
-SQL statement "INSERT INTO public.messages (id, match_id, sender_id, body)
-    VALUES ('99999999-0000-0000-0000-000000000005', v_mid, '22222222-2222-2222-2222-222222222222', 'Unread test')
-    ON CONFLICT (id) DO NOTHING"
-PL/pgSQL function inline_code_block line 7 at SQL statement
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ok 57 - 57. Likes older than 24 hours do not count toward daily limit
+ok 58 - 58. Mutual likes create exactly one match
+not ok 59 - 59. Anon cannot execute get_discovery_feed
+# Failed test 59: "59. Anon cannot execute get_discovery_feed"
+#       caught: no exception
+#       wanted: 42501
+ok 60 - 60. Anon cannot execute mark_messages_read
+ok 61 - 61. Anon cannot execute review_photo
+ok 62 - 62. Anon cannot execute admit_batch
+ok 63 - 63. Pagination: get_discovery_feed limit 1 offset 0 returns page 1
+ok 64 - 64. Pagination: get_discovery_feed limit 1 offset 1 returns page 2
+ok 65 - 65. Stable order: page 1 user_id is distinct from page 2 user_id
+# Looks like you failed 3 tests of 65
 
 === 3. Supabase CLI test db (Full Suite: Phase 2 + Phase 3) ===
 Connecting to local database...
@@ -339,13 +318,15 @@ dcccee43ad5d: Pulling fs layer
 a22cb17b3b93: Pulling fs layer
 4f4fb700ef54: Pulling fs layer
 4f4fb700ef54: Waiting
+a22cb17b3b93: Verifying Checksum
 a22cb17b3b93: Download complete
+dcccee43ad5d: Verifying Checksum
 dcccee43ad5d: Download complete
 06d62d0de6d7: Verifying Checksum
 06d62d0de6d7: Download complete
+dcccee43ad5d: Pull complete
 4f4fb700ef54: Verifying Checksum
 4f4fb700ef54: Download complete
-dcccee43ad5d: Pull complete
 06d62d0de6d7: Pull complete
 a22cb17b3b93: Pull complete
 4f4fb700ef54: Pull complete
@@ -355,22 +336,24 @@ ghcr.io/supabase/pg_prove:3.36
 psql:/home/runner/work/koodal-dating-app/koodal-dating-app/supabase/tests/database_security_and_admissions.sql:9: NOTICE:  extension "pgtap" already exists, skipping
 /home/runner/work/koodal-dating-app/koodal-dating-app/supabase/tests/database_security_and_admissions.sql .. ok
 psql:/home/runner/work/koodal-dating-app/koodal-dating-app/supabase/tests/phase3_security_and_discovery.sql:8: NOTICE:  extension "pgtap" already exists, skipping
-psql:/home/runner/work/koodal-dating-app/koodal-dating-app/supabase/tests/phase3_security_and_discovery.sql:547: ERROR:  Cannot modify photo review status
-CONTEXT:  PL/pgSQL function prevent_photo_status_tamper() line 4 at RAISE
 /home/runner/work/koodal-dating-app/koodal-dating-app/supabase/tests/phase3_security_and_discovery.sql ..... 
-# Failed test 30: "30. Unadmitted waitlist profile disappears from discovery feed"
+# Failed test 54: "54. Non-participant cannot insert messages into someone else match"
+#       caught: P0002: Match not found
+#       wanted: 42501
+# Failed test 56: "56. After a block, neither person can read old chat history (blocker view)"
 #         have: 1
 #         want: 0
-Dubious, test returned 3 (wstat 768, 0x300)
-Failed 35/65 subtests 
+# Failed test 59: "59. Anon cannot execute get_discovery_feed"
+#       caught: no exception
+#       wanted: 42501
+# Looks like you failed 3 tests of 65
+Failed 3/65 subtests 
 
 Test Summary Report
 -------------------
-/home/runner/work/koodal-dating-app/koodal-dating-app/supabase/tests/phase3_security_and_discovery.sql   (Wstat: 768 (exited 3) Tests: 31 Failed: 1)
-  Failed test:  30
-  Non-zero exit status: 3
-  Parse errors: Bad plan.  You planned 65 tests but ran 31.
-Files=2, Tests=45,  1 wallclock secs ( 0.02 usr  0.01 sys +  0.02 cusr  0.01 csys =  0.06 CPU)
+/home/runner/work/koodal-dating-app/koodal-dating-app/supabase/tests/phase3_security_and_discovery.sql   (Wstat: 0 Tests: 65 Failed: 3)
+  Failed tests:  54, 56, 59
+Files=2, Tests=79,  0 wallclock secs ( 0.01 usr  0.01 sys +  0.01 cusr  0.01 csys =  0.04 CPU)
 Result: FAIL
 error running container: exit 1
 Try rerunning the command with --debug to troubleshoot the error.
