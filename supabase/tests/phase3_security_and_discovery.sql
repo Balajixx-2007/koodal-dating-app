@@ -15,9 +15,13 @@ SELECT plan(65);
 
 -- Compatibility shim for pre-Phase 3 schema during RED run seed
 CREATE OR REPLACE FUNCTION public.calculate_waitlist_score(
-    p_city TEXT, p_selfie BOOLEAN, p_profile BOOLEAN, p_referrals BIGINT, p_created TIMESTAMPTZ
+    p_city TEXT,
+    p_selfie_verified BOOLEAN,
+    p_profile_complete BOOLEAN,
+    p_referrals BIGINT,
+    p_created_at TIMESTAMPTZ
 ) RETURNS INT AS $$
-    SELECT public.calculate_waitlist_score(p_city, p_selfie, p_profile, p_referrals::int, p_created);
+    SELECT public.calculate_waitlist_score(p_city, p_selfie_verified, p_profile_complete, p_referrals::int, p_created_at);
 $$ LANGUAGE sql IMMUTABLE;
 
 -- Seed Admin
@@ -50,11 +54,6 @@ INSERT INTO public.verifications (user_id, selfie_path, result)
 VALUES ('11111111-1111-1111-1111-111111111111', '11111111-1111-1111-1111-111111111111/selfie.jpg', 'approved')
 ON CONFLICT DO NOTHING;
 
--- Seed Member A photo (pending)
-INSERT INTO public.profile_photos (id, owner, storage_path, position, status)
-VALUES ('aaaaaaaa-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', '11111111-1111-1111-1111-111111111111/photo1.jpg', 0, 'pending')
-ON CONFLICT (id) DO NOTHING;
-
 -- Seed Member B (Chennai, Active, Admitted, Verified Selfie)
 INSERT INTO auth.users (id, email, email_confirmed_at)
 VALUES ('22222222-2222-2222-2222-222222222222', 'member_b@example.com', NOW())
@@ -75,19 +74,6 @@ ON CONFLICT (email) DO UPDATE SET status = 'admitted';
 INSERT INTO public.verifications (user_id, selfie_path, result)
 VALUES ('22222222-2222-2222-2222-222222222222', '22222222-2222-2222-2222-222222222222/selfie.jpg', 'approved')
 ON CONFLICT DO NOTHING;
-
--- Seed Member B Photos (approved, pending, rejected)
-INSERT INTO public.profile_photos (id, owner, storage_path, position, status)
-VALUES ('bbbbbbbb-0000-0000-0000-000000000001', '22222222-2222-2222-2222-222222222222', '22222222-2222-2222-2222-222222222222/photo1.jpg', 0, 'approved')
-ON CONFLICT (id) DO NOTHING;
-
-INSERT INTO public.profile_photos (id, owner, storage_path, position, status)
-VALUES ('bbbbbbbb-0000-0000-0000-000000000002', '22222222-2222-2222-2222-222222222222', '22222222-2222-2222-2222-222222222222/photo2_pending.jpg', 1, 'pending')
-ON CONFLICT (id) DO NOTHING;
-
-INSERT INTO public.profile_photos (id, owner, storage_path, position, status)
-VALUES ('bbbbbbbb-0000-0000-0000-000000000003', '22222222-2222-2222-2222-222222222222', '22222222-2222-2222-2222-222222222222/photo3_rejected.jpg', 2, 'rejected')
-ON CONFLICT (id) DO NOTHING;
 
 -- Seed Member C (Third Party Member)
 INSERT INTO auth.users (id, email, email_confirmed_at)
@@ -110,9 +96,22 @@ INSERT INTO public.verifications (user_id, selfie_path, result)
 VALUES ('33333333-3333-3333-3333-333333333333', '33333333-3333-3333-3333-333333333333/selfie.jpg', 'approved')
 ON CONFLICT DO NOTHING;
 
-INSERT INTO public.profile_photos (id, owner, storage_path, position, status)
-VALUES ('cccccccc-0000-0000-0000-000000000001', '33333333-3333-3333-3333-333333333333', '33333333-3333-3333-3333-333333333333/photo1.jpg', 0, 'approved')
-ON CONFLICT (id) DO NOTHING;
+-- Seed Profile Photos (conditional so pre-Phase 3 schema does not fail during RED run seed)
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'profile_photos') THEN
+        EXECUTE $seed$
+            INSERT INTO public.profile_photos (id, owner, storage_path, position, status)
+            VALUES 
+                ('aaaaaaaa-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', '11111111-1111-1111-1111-111111111111/photo1.jpg', 0, 'pending'),
+                ('bbbbbbbb-0000-0000-0000-000000000001', '22222222-2222-2222-2222-222222222222', '22222222-2222-2222-2222-222222222222/photo1.jpg', 0, 'approved'),
+                ('bbbbbbbb-0000-0000-0000-000000000002', '22222222-2222-2222-2222-222222222222', '22222222-2222-2222-2222-222222222222/photo2_pending.jpg', 1, 'pending'),
+                ('bbbbbbbb-0000-0000-0000-000000000003', '22222222-2222-2222-2222-222222222222', '22222222-2222-2222-2222-222222222222/photo3_rejected.jpg', 2, 'rejected'),
+                ('cccccccc-0000-0000-0000-000000000001', '33333333-3333-3333-3333-333333333333', '33333333-3333-3333-3333-333333333333/photo1.jpg', 0, 'approved')
+            ON CONFLICT (id) DO NOTHING;
+        $seed$;
+    END IF;
+END $$;
 
 -- Ensure waitlist admissions are marked admitted under admin authority
 SET LOCAL ROLE authenticated;
