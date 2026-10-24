@@ -43,10 +43,12 @@ jobs:
       - name: Stop host PostgreSQL if running
         run: sudo systemctl stop postgresql || true
 
-      - name: Start Supabase local instance (Pre-Phase 3 baseline)
+      - name: Start Supabase local instance (Pre-Step 1.5 baseline)
         run: |
-          # Temporarily hold migration 10 to boot Supabase at pre-Phase 3 baseline (migrations 1 to 9)
-          mv supabase/migrations/20261024000010_phase3_core_security_and_discovery.sql supabase/migrations/20261024000010_phase3_core_security_and_discovery.sql.pending
+          # Temporarily hold migration 11 to boot Supabase at baseline with migrations 1 to 10
+          if [ -f supabase/migrations/20261024000011_step1_5_fix_read_functions.sql ]; then
+            mv supabase/migrations/20261024000011_step1_5_fix_read_functions.sql supabase/migrations/20261024000011_step1_5_fix_read_functions.sql.pending
+          fi
           supabase start
 
       - name: Run Supabase pgTAP database tests (Red and Green runs)
@@ -54,19 +56,21 @@ jobs:
           CONTAINER_ID=$(docker ps --filter "name=supabase_db_" --format "{{.ID}}")
           > pg_tap_output.txt
 
-          echo "=== 1. RED STATE TAP OUTPUT (Tests against schema before Phase 3 migrations) ===" | tee -a pg_tap_output.txt
-          docker exec -i "$CONTAINER_ID" psql -U postgres -d postgres -X -q -t -A < supabase/tests/phase3_security_and_discovery.sql 2>&1 | tee -a pg_tap_output.txt || true
+          echo "=== 1. RED STATE TAP OUTPUT (Step 1.5 tests before migration 11) ===" | tee -a pg_tap_output.txt
+          docker exec -i "$CONTAINER_ID" psql -U postgres -d postgres -X -q -t -A < supabase/tests/step1_5_read_functions.sql 2>&1 | tee -a pg_tap_output.txt || true
 
-          # Restore and apply Phase 3 migration 10
-          mv supabase/migrations/20261024000010_phase3_core_security_and_discovery.sql.pending supabase/migrations/20261024000010_phase3_core_security_and_discovery.sql
-          docker exec -i "$CONTAINER_ID" psql -U postgres -d postgres -X -q < supabase/migrations/20261024000010_phase3_core_security_and_discovery.sql
-
-          echo "" | tee -a pg_tap_output.txt
-          echo "=== 2. GREEN STATE TAP OUTPUT (Tests against schema after Phase 3 migrations) ===" | tee -a pg_tap_output.txt
-          docker exec -i "$CONTAINER_ID" psql -U postgres -d postgres -X -q -t -A < supabase/tests/phase3_security_and_discovery.sql 2>&1 | tee -a pg_tap_output.txt
+          # Restore and apply Step 1.5 migration 11
+          if [ -f supabase/migrations/20261024000011_step1_5_fix_read_functions.sql.pending ]; then
+            mv supabase/migrations/20261024000011_step1_5_fix_read_functions.sql.pending supabase/migrations/20261024000011_step1_5_fix_read_functions.sql
+            docker exec -i "$CONTAINER_ID" psql -U postgres -d postgres -X -q < supabase/migrations/20261024000011_step1_5_fix_read_functions.sql
+          fi
 
           echo "" | tee -a pg_tap_output.txt
-          echo "=== 3. Supabase CLI test db (Full Suite: Phase 2 + Phase 3) ===" | tee -a pg_tap_output.txt
+          echo "=== 2. GREEN STATE TAP OUTPUT (Step 1.5 tests after migration 11) ===" | tee -a pg_tap_output.txt
+          docker exec -i "$CONTAINER_ID" psql -U postgres -d postgres -X -q -t -A < supabase/tests/step1_5_read_functions.sql 2>&1 | tee -a pg_tap_output.txt
+
+          echo "" | tee -a pg_tap_output.txt
+          echo "=== 3. Supabase CLI test db (Full Suite: Phase 2 + Phase 3 + Step 1.5) ===" | tee -a pg_tap_output.txt
           supabase test db 2>&1 | tee -a pg_tap_output.txt
 
       - name: Run Vitest database & formula tests
