@@ -326,6 +326,26 @@ USING (
     )
 );
 
+-- Messages RLS: Hide chat history after a block
+DROP POLICY IF EXISTS "Match participants and admins can read messages" ON public.messages;
+DROP POLICY IF EXISTS "Match participants can read unblocked messages" ON public.messages;
+CREATE POLICY "Match participants can read unblocked messages"
+ON public.messages FOR SELECT
+TO authenticated
+USING (
+    public.is_admin()
+    OR EXISTS (
+        SELECT 1 FROM public.matches m
+        WHERE m.id = messages.match_id
+          AND (m.user_a = auth.uid() OR m.user_b = auth.uid())
+          AND NOT EXISTS (
+              SELECT 1 FROM public.blocks b
+              WHERE (b.blocker = m.user_a AND b.blocked = m.user_b)
+                 OR (b.blocker = m.user_b AND b.blocked = m.user_a)
+          )
+    )
+);
+
 -- 11. Messages security: Length check, active sender, bidirectional blocks, read receipts
 CREATE OR REPLACE FUNCTION public.validate_message_insert()
 RETURNS TRIGGER
@@ -628,7 +648,7 @@ BEGIN
 END;
 $$;
 
-REVOKE EXECUTE ON FUNCTION public.get_discovery_feed(INT, INT) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.get_discovery_feed(INT, INT) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.get_discovery_feed(INT, INT) TO authenticated;
 
 -- 14. Single Profile Detail Function: get_member_profile (Privacy preserved)

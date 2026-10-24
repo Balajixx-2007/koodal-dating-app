@@ -763,16 +763,16 @@ SELECT is(
 RESET ROLE;
 DELETE FROM public.blocks WHERE (blocker = '11111111-1111-1111-1111-111111111111' AND blocked = '22222222-2222-2222-2222-222222222222')
                              OR (blocker = '22222222-2222-2222-2222-222222222222' AND blocked = '11111111-1111-1111-1111-111111111111');
-DO $$
-DECLARE v_mid UUID;
-BEGIN
-    SELECT id INTO v_mid FROM public.matches 
-    WHERE (user_a = '11111111-1111-1111-1111-111111111111' AND user_b = '22222222-2222-2222-2222-222222222222')
-       OR (user_a = '22222222-2222-2222-2222-222222222222' AND user_b = '11111111-1111-1111-1111-111111111111');
-    INSERT INTO public.messages (id, match_id, sender_id, body)
-    VALUES ('99999999-0000-0000-0000-000000000005', v_mid, '22222222-2222-2222-2222-222222222222', 'Unread test')
-    ON CONFLICT (id) DO NOTHING;
-END $$;
+CREATE TEMP TABLE IF NOT EXISTS test_ab_match (id UUID);
+DELETE FROM test_ab_match;
+INSERT INTO test_ab_match 
+SELECT id FROM public.matches 
+WHERE (user_a = '11111111-1111-1111-1111-111111111111' AND user_b = '22222222-2222-2222-2222-222222222222')
+   OR (user_a = '22222222-2222-2222-2222-222222222222' AND user_b = '11111111-1111-1111-1111-111111111111');
+
+INSERT INTO public.messages (id, match_id, sender_id, body)
+VALUES ('99999999-0000-0000-0000-000000000005', (SELECT id FROM test_ab_match), '22222222-2222-2222-2222-222222222222', 'Unread test')
+ON CONFLICT (id) DO NOTHING;
 
 -- 53: Non-participant (Member C) cannot read messages in Match(A, B)
 SET LOCAL ROLE authenticated;
@@ -787,7 +787,7 @@ SELECT is(
 
 -- 54: Non-participant cannot insert into someone else match
 SELECT throws_ok(
-    'INSERT INTO public.messages (match_id, sender_id, body) VALUES ((SELECT id FROM public.matches WHERE (user_a = ''11111111-1111-1111-1111-111111111111'' AND user_b = ''22222222-2222-2222-2222-222222222222'') OR (user_a = ''22222222-2222-2222-2222-222222222222'' AND user_b = ''11111111-1111-1111-1111-111111111111'')), ''33333333-3333-3333-3333-333333333333'', ''Intruder msg'')',
+    'INSERT INTO public.messages (match_id, sender_id, body) VALUES ((SELECT id FROM test_ab_match), ''33333333-3333-3333-3333-333333333333'', ''Intruder msg'')',
     '42501',
     NULL,
     '54. Non-participant cannot insert messages into someone else match'
@@ -795,7 +795,7 @@ SELECT throws_ok(
 
 -- 55: Non-participant cannot call mark_messages_read for someone else match
 SELECT throws_ok(
-    'SELECT public.mark_messages_read((SELECT id FROM public.matches WHERE (user_a = ''11111111-1111-1111-1111-111111111111'' AND user_b = ''22222222-2222-2222-2222-222222222222'') OR (user_a = ''22222222-2222-2222-2222-222222222222'' AND user_b = ''11111111-1111-1111-1111-111111111111'')))',
+    'SELECT public.mark_messages_read((SELECT id FROM test_ab_match))',
     '42501',
     NULL,
     '55. Non-participant cannot call mark_messages_read on someone else match'
@@ -856,6 +856,8 @@ SELECT is(
 -- Test 59 - 62: Anon Role Execution Blocks (Item 7)
 -- ==============================================================================
 SET LOCAL ROLE anon;
+SET LOCAL "request.jwt.claim.sub" TO '';
+SET LOCAL "request.jwt.claim.email" TO '';
 
 SELECT throws_ok(
     'SELECT * FROM public.get_discovery_feed()',
