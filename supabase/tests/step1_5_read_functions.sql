@@ -10,8 +10,8 @@ INSERT INTO auth.users (id, email, email_confirmed_at)
 VALUES ('00000000-0000-0000-0000-000000000001', 'admin@example.com', NOW())
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO public.admins (user_id, role)
-VALUES ('00000000-0000-0000-0000-000000000001', 'superadmin')
+INSERT INTO public.admins (user_id)
+VALUES ('00000000-0000-0000-0000-000000000001')
 ON CONFLICT (user_id) DO NOTHING;
 
 -- Seed Users
