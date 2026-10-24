@@ -107,7 +107,7 @@ INSERT INTO public.profile_photos (id, owner, storage_path, position, status)
 VALUES ('cccccccc-0000-0000-0000-000000000001', '33333333-3333-3333-3333-333333333333', 'photos/33333333-3333-3333-3333-333333333333/photo1.jpg', 0, 'approved')
 ON CONFLICT (id) DO NOTHING;
 
--- Seed Member D (for mutual like concurrency test)
+-- Seed Member D (for pagination caller)
 INSERT INTO auth.users (id, email, email_confirmed_at)
 VALUES ('44444444-4444-4444-4444-444444444444', 'member_d@example.com', NOW())
 ON CONFLICT (id) DO NOTHING;
@@ -119,6 +119,19 @@ ON CONFLICT (id) DO UPDATE SET status = 'active';
 INSERT INTO public.profiles (user_id, name, birth_date, gender, intent, city)
 VALUES ('44444444-4444-4444-4444-444444444444', 'Member D', '1999-12-12', 'man', 'casual', 'Chennai')
 ON CONFLICT (user_id) DO UPDATE SET city = 'Chennai', is_paused = FALSE;
+
+-- Seed Member E & F (for isolated mutual likes concurrency test)
+INSERT INTO auth.users (id, email, email_confirmed_at)
+VALUES 
+    ('55555555-5555-5555-5555-555555555555', 'member_e@example.com', NOW()),
+    ('66666666-6666-6666-6666-666666666666', 'member_f@example.com', NOW())
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.users (id, email, status)
+VALUES 
+    ('55555555-5555-5555-5555-555555555555', 'member_e@example.com', 'active'),
+    ('66666666-6666-6666-6666-666666666666', 'member_f@example.com', 'active')
+ON CONFLICT (id) DO NOTHING;
 
 -- Seed Banned User
 INSERT INTO auth.users (id, email, email_confirmed_at)
@@ -427,10 +440,8 @@ SELECT throws_ok(
 -- Candidate tested is Member C (from Member A caller perspective)
 -- ==============================================================================
 RESET ROLE;
--- Remove any interactions between Member A and Member C
 DELETE FROM public.blocks WHERE (blocker = '11111111-1111-1111-1111-111111111111' AND blocked = '33333333-3333-3333-3333-333333333333')
                              OR (blocker = '33333333-3333-3333-3333-333333333333' AND blocked = '11111111-1111-1111-1111-111111111111');
-DELETE FROM public.likes WHERE from_user = '11111111-1111-1111-1111-111111111111' AND to_user = '33333333-3333-3333-3333-333333333333';
 DELETE FROM public.passes WHERE user_id = '11111111-1111-1111-1111-111111111111' AND target_id = '33333333-3333-3333-3333-333333333333';
 
 SET LOCAL ROLE authenticated;
@@ -735,7 +746,6 @@ SELECT is(
 -- ==============================================================================
 -- Match between A and B
 RESET ROLE;
--- Ensure Match(A, B) exists with an unread message
 DO $$
 DECLARE v_mid UUID;
 BEGIN
@@ -789,37 +799,37 @@ SELECT is(
     '56. After a block, neither person can read old chat history (blocker view)'
 );
 
--- 57: Likes older than 24 hours do not count toward daily limit
+-- 57: Likes older than 24 hours do not count toward daily limit (tested on isolated Member E)
 RESET ROLE;
--- Insert 20 likes for Member C that occurred 25 hours ago
+-- Insert 20 likes for Member E that occurred 25 hours ago
 DO $$
 DECLARE i INT; target_uuid UUID;
 BEGIN
     FOR i IN 1..20 LOOP
-        target_uuid := ('cccccccc-0000-0000-0000-' || LPAD(i::text, 12, '0'))::UUID;
-        INSERT INTO auth.users (id, email) VALUES (target_uuid, 'old_target_' || i || '@example.com') ON CONFLICT DO NOTHING;
-        INSERT INTO public.users (id, email) VALUES (target_uuid, 'old_target_' || i || '@example.com') ON CONFLICT DO NOTHING;
+        target_uuid := ('eeeeeeee-0000-0000-0000-' || LPAD(i::text, 12, '0'))::UUID;
+        INSERT INTO auth.users (id, email) VALUES (target_uuid, 'old_target_e_' || i || '@example.com') ON CONFLICT DO NOTHING;
+        INSERT INTO public.users (id, email) VALUES (target_uuid, 'old_target_e_' || i || '@example.com') ON CONFLICT DO NOTHING;
         INSERT INTO public.likes (from_user, to_user, created_at)
-        VALUES ('33333333-3333-3333-3333-333333333333', target_uuid, NOW() - INTERVAL '25 hours')
+        VALUES ('55555555-5555-5555-5555-555555555555', target_uuid, NOW() - INTERVAL '25 hours')
         ON CONFLICT DO NOTHING;
     END LOOP;
 END $$;
 
--- Member C can still like today despite 20 expired likes
+-- Member E can still like today despite 20 expired likes
 SELECT lives_ok(
-    'INSERT INTO public.likes (from_user, to_user) VALUES (''33333333-3333-3333-3333-333333333333'', ''44444444-4444-4444-4444-444444444444'')',
+    'INSERT INTO public.likes (from_user, to_user) VALUES (''55555555-5555-5555-5555-555555555555'', ''66666666-6666-6666-6666-666666666666'')',
     '57. Likes older than 24 hours do not count toward daily limit'
 );
 
--- 58: Two simultaneous mutual likes create one match
+-- 58: Two simultaneous mutual likes create one match (Member F likes Member E)
 INSERT INTO public.likes (from_user, to_user)
-VALUES ('44444444-4444-4444-4444-444444444444', '33333333-3333-3333-3333-333333333333')
+VALUES ('66666666-6666-6666-6666-666666666666', '55555555-5555-5555-5555-555555555555')
 ON CONFLICT DO NOTHING;
 
 SELECT is(
     (SELECT COUNT(*)::int FROM public.matches 
-     WHERE (user_a = '33333333-3333-3333-3333-333333333333' AND user_b = '44444444-4444-4444-4444-444444444444')
-        OR (user_a = '44444444-4444-4444-4444-444444444444' AND user_b = '33333333-3333-3333-3333-333333333333')),
+     WHERE (user_a = '55555555-5555-5555-5555-555555555555' AND user_b = '66666666-6666-6666-6666-666666666666')
+        OR (user_a = '66666666-6666-6666-6666-666666666666' AND user_b = '55555555-5555-5555-5555-555555555555')),
     1,
     '58. Mutual likes create exactly one match'
 );
@@ -861,16 +871,15 @@ SELECT throws_ok(
 
 -- ==============================================================================
 -- Test 63 - 65: Pagination and Stable Order (Item 8)
+-- Member D caller viewing Member B and Member C (both eligible in Chennai)
 -- ==============================================================================
 RESET ROLE;
--- Clean candidates for Member A: ensure Member B and Member C are discoverable
-DELETE FROM public.blocks WHERE blocker = '11111111-1111-1111-1111-111111111111' OR blocked = '11111111-1111-1111-1111-111111111111';
-DELETE FROM public.likes WHERE from_user = '11111111-1111-1111-1111-111111111111';
-DELETE FROM public.passes WHERE user_id = '11111111-1111-1111-1111-111111111111';
+DELETE FROM public.blocks WHERE blocker = '44444444-4444-4444-4444-444444444444' OR blocked = '44444444-4444-4444-4444-444444444444';
+DELETE FROM public.passes WHERE user_id = '44444444-4444-4444-4444-444444444444';
 
 SET LOCAL ROLE authenticated;
-SET LOCAL "request.jwt.claim.sub" TO '11111111-1111-1111-1111-111111111111';
-SET LOCAL "request.jwt.claim.email" TO 'member_a@example.com';
+SET LOCAL "request.jwt.claim.sub" TO '44444444-4444-4444-4444-444444444444';
+SET LOCAL "request.jwt.claim.email" TO 'member_d@example.com';
 
 -- 63: Page 1 with limit 1
 SELECT is(
