@@ -154,17 +154,30 @@ CREATE POLICY "Owner can insert photos" ON public.profile_photos
         AND reviewed_at IS NULL
     );
 
+CREATE OR REPLACE FUNCTION public.prevent_photo_status_tamper()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+    IF NOT public.is_admin() AND NEW.status IS DISTINCT FROM OLD.status THEN
+        RAISE EXCEPTION 'Cannot modify photo review status' USING ERRCODE = '42501';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_prevent_photo_status_tamper ON public.profile_photos;
+CREATE TRIGGER trg_prevent_photo_status_tamper
+BEFORE UPDATE ON public.profile_photos
+FOR EACH ROW EXECUTE FUNCTION public.prevent_photo_status_tamper();
+
 DROP POLICY IF EXISTS "Owner can update own photos" ON public.profile_photos;
 CREATE POLICY "Owner can update own photos" ON public.profile_photos
     FOR UPDATE TO authenticated
     USING (auth.uid() = owner OR public.is_admin())
-    WITH CHECK (
-        public.is_admin()
-        OR (
-            auth.uid() = owner
-            AND status = (SELECT p2.status FROM public.profile_photos p2 WHERE p2.id = profile_photos.id)
-        )
-    );
+    WITH CHECK (auth.uid() = owner OR public.is_admin());
 
 DROP POLICY IF EXISTS "Owner can delete own photos" ON public.profile_photos;
 CREATE POLICY "Owner can delete own photos" ON public.profile_photos

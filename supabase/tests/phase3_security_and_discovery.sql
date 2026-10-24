@@ -13,6 +13,13 @@ SELECT plan(65);
 -- 1. Setup Test Fixtures & Seed Data
 -- ==============================================================================
 
+-- Compatibility shim for pre-Phase 3 schema during RED run seed
+CREATE OR REPLACE FUNCTION public.calculate_waitlist_score(
+    p_city TEXT, p_selfie BOOLEAN, p_profile BOOLEAN, p_referrals BIGINT, p_created TIMESTAMPTZ
+) RETURNS INT AS $$
+    SELECT public.calculate_waitlist_score(p_city, p_selfie, p_profile, p_referrals::int, p_created);
+$$ LANGUAGE sql IMMUTABLE;
+
 -- Seed Admin
 INSERT INTO auth.users (id, email, email_confirmed_at)
 VALUES ('00000000-0000-0000-0000-000000000001', 'admin@example.com', NOW())
@@ -40,12 +47,12 @@ VALUES ('11111111-1111-1111-1111-111111111111', 'member_a@example.com', 'Chennai
 ON CONFLICT (email) DO UPDATE SET status = 'admitted';
 
 INSERT INTO public.verifications (user_id, selfie_path, result)
-VALUES ('11111111-1111-1111-1111-111111111111', 'selfies/11111111-1111-1111-1111-111111111111/selfie.jpg', 'approved')
+VALUES ('11111111-1111-1111-1111-111111111111', '11111111-1111-1111-1111-111111111111/selfie.jpg', 'approved')
 ON CONFLICT DO NOTHING;
 
 -- Seed Member A photo (pending)
 INSERT INTO public.profile_photos (id, owner, storage_path, position, status)
-VALUES ('aaaaaaaa-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', 'photos/11111111-1111-1111-1111-111111111111/photo1.jpg', 0, 'pending')
+VALUES ('aaaaaaaa-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', '11111111-1111-1111-1111-111111111111/photo1.jpg', 0, 'pending')
 ON CONFLICT (id) DO NOTHING;
 
 -- Seed Member B (Chennai, Active, Admitted, Verified Selfie)
@@ -66,29 +73,29 @@ VALUES ('22222222-2222-2222-2222-222222222222', 'member_b@example.com', 'Chennai
 ON CONFLICT (email) DO UPDATE SET status = 'admitted';
 
 INSERT INTO public.verifications (user_id, selfie_path, result)
-VALUES ('22222222-2222-2222-2222-222222222222', 'selfies/22222222-2222-2222-2222-222222222222/selfie.jpg', 'approved')
+VALUES ('22222222-2222-2222-2222-222222222222', '22222222-2222-2222-2222-222222222222/selfie.jpg', 'approved')
 ON CONFLICT DO NOTHING;
 
 -- Seed Member B Photos (approved, pending, rejected)
 INSERT INTO public.profile_photos (id, owner, storage_path, position, status)
-VALUES ('bbbbbbbb-0000-0000-0000-000000000001', '22222222-2222-2222-2222-222222222222', 'photos/22222222-2222-2222-2222-222222222222/photo1.jpg', 0, 'approved')
+VALUES ('bbbbbbbb-0000-0000-0000-000000000001', '22222222-2222-2222-2222-222222222222', '22222222-2222-2222-2222-222222222222/photo1.jpg', 0, 'approved')
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO public.profile_photos (id, owner, storage_path, position, status)
-VALUES ('bbbbbbbb-0000-0000-0000-000000000002', '22222222-2222-2222-2222-222222222222', 'photos/22222222-2222-2222-2222-222222222222/photo2_pending.jpg', 1, 'pending')
+VALUES ('bbbbbbbb-0000-0000-0000-000000000002', '22222222-2222-2222-2222-222222222222', '22222222-2222-2222-2222-222222222222/photo2_pending.jpg', 1, 'pending')
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO public.profile_photos (id, owner, storage_path, position, status)
-VALUES ('bbbbbbbb-0000-0000-0000-000000000003', '22222222-2222-2222-2222-222222222222', 'photos/22222222-2222-2222-2222-222222222222/photo3_rejected.jpg', 2, 'rejected')
+VALUES ('bbbbbbbb-0000-0000-0000-000000000003', '22222222-2222-2222-2222-222222222222', '22222222-2222-2222-2222-222222222222/photo3_rejected.jpg', 2, 'rejected')
 ON CONFLICT (id) DO NOTHING;
 
 -- Seed Member C (Third Party Member)
 INSERT INTO auth.users (id, email, email_confirmed_at)
-VALUES ('33333333-3333-3333-3333-333333333333', 'member_c@example.com', NOW())
+VALUES ('33333333-3333-3333-3333-333333333333', 'member_c_phase3@example.com', NOW())
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO public.users (id, email, status)
-VALUES ('33333333-3333-3333-3333-333333333333', 'member_c@example.com', 'active')
+VALUES ('33333333-3333-3333-3333-333333333333', 'member_c_phase3@example.com', 'active')
 ON CONFLICT (id) DO UPDATE SET status = 'active';
 
 INSERT INTO public.profiles (user_id, name, birth_date, gender, intent, city)
@@ -96,16 +103,29 @@ VALUES ('33333333-3333-3333-3333-333333333333', 'Member C', '1998-08-20', 'woman
 ON CONFLICT (user_id) DO UPDATE SET city = 'Chennai', is_paused = FALSE;
 
 INSERT INTO public.waitlist_entries (user_id, email, city, gender, intent, status)
-VALUES ('33333333-3333-3333-3333-333333333333', 'member_c@example.com', 'Chennai', 'woman', 'casual', 'admitted')
+VALUES ('33333333-3333-3333-3333-333333333333', 'member_c_phase3@example.com', 'Chennai', 'woman', 'casual', 'admitted')
 ON CONFLICT (email) DO UPDATE SET status = 'admitted';
 
 INSERT INTO public.verifications (user_id, selfie_path, result)
-VALUES ('33333333-3333-3333-3333-333333333333', 'selfies/33333333-3333-3333-3333-333333333333/selfie.jpg', 'approved')
+VALUES ('33333333-3333-3333-3333-333333333333', '33333333-3333-3333-3333-333333333333/selfie.jpg', 'approved')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO public.profile_photos (id, owner, storage_path, position, status)
-VALUES ('cccccccc-0000-0000-0000-000000000001', '33333333-3333-3333-3333-333333333333', 'photos/33333333-3333-3333-3333-333333333333/photo1.jpg', 0, 'approved')
+VALUES ('cccccccc-0000-0000-0000-000000000001', '33333333-3333-3333-3333-333333333333', '33333333-3333-3333-3333-333333333333/photo1.jpg', 0, 'approved')
 ON CONFLICT (id) DO NOTHING;
+
+-- Ensure waitlist admissions are marked admitted under admin authority
+SET LOCAL ROLE authenticated;
+SET LOCAL "request.jwt.claim.sub" TO '00000000-0000-0000-0000-000000000001';
+SET LOCAL "request.jwt.claim.email" TO 'admin@example.com';
+UPDATE public.waitlist_entries 
+SET status = 'admitted' 
+WHERE user_id IN (
+    '11111111-1111-1111-1111-111111111111',
+    '22222222-2222-2222-2222-222222222222',
+    '33333333-3333-3333-3333-333333333333'
+);
+RESET ROLE;
 
 -- Seed Member D (for pagination caller)
 INSERT INTO auth.users (id, email, email_confirmed_at)
@@ -145,10 +165,11 @@ ON CONFLICT (id) DO UPDATE SET status = 'banned';
 -- Seed Storage Objects for testing storage RLS
 INSERT INTO storage.objects (id, bucket_id, name, owner)
 VALUES 
-    ('10000000-0000-0000-0000-000000000001', 'photos', 'photos/22222222-2222-2222-2222-222222222222/photo1.jpg', '22222222-2222-2222-2222-222222222222'),
-    ('10000000-0000-0000-0000-000000000002', 'photos', 'photos/22222222-2222-2222-2222-222222222222/photo2_pending.jpg', '22222222-2222-2222-2222-222222222222'),
-    ('10000000-0000-0000-0000-000000000003', 'selfies', 'selfies/11111111-1111-1111-1111-111111111111/selfie.jpg', '11111111-1111-1111-1111-111111111111'),
-    ('10000000-0000-0000-0000-000000000004', 'selfies', 'selfies/22222222-2222-2222-2222-222222222222/selfie.jpg', '22222222-2222-2222-2222-222222222222')
+    ('10000000-0000-0000-0000-000000000001', 'photos', '22222222-2222-2222-2222-222222222222/photo1.jpg', '22222222-2222-2222-2222-222222222222'),
+    ('10000000-0000-0000-0000-000000000002', 'photos', '22222222-2222-2222-2222-222222222222/photo2_pending.jpg', '22222222-2222-2222-2222-222222222222'),
+    ('10000000-0000-0000-0000-000000000003', 'selfies', '11111111-1111-1111-1111-111111111111/selfie.jpg', '11111111-1111-1111-1111-111111111111'),
+    ('10000000-0000-0000-0000-000000000004', 'selfies', '22222222-2222-2222-2222-222222222222/selfie.jpg', '22222222-2222-2222-2222-222222222222'),
+    ('10000000-0000-0000-0000-000000000005', 'photos', '33333333-3333-3333-3333-333333333333/photo1.jpg', '33333333-3333-3333-3333-333333333333')
 ON CONFLICT (id) DO NOTHING;
 
 
@@ -443,6 +464,7 @@ RESET ROLE;
 DELETE FROM public.blocks WHERE (blocker = '11111111-1111-1111-1111-111111111111' AND blocked = '33333333-3333-3333-3333-333333333333')
                              OR (blocker = '33333333-3333-3333-3333-333333333333' AND blocked = '11111111-1111-1111-1111-111111111111');
 DELETE FROM public.passes WHERE user_id = '11111111-1111-1111-1111-111111111111' AND target_id = '33333333-3333-3333-3333-333333333333';
+DELETE FROM public.preferences WHERE user_id = '11111111-1111-1111-1111-111111111111';
 
 SET LOCAL ROLE authenticated;
 SET LOCAL "request.jwt.claim.sub" TO '11111111-1111-1111-1111-111111111111';
@@ -559,18 +581,12 @@ SELECT is(
 );
 ROLLBACK TO sp_filter;
 
--- 35: Already liked profile disappears
-SAVEPOINT sp_filter;
-RESET ROLE;
-INSERT INTO public.likes (from_user, to_user) VALUES ('11111111-1111-1111-1111-111111111111', '33333333-3333-3333-3333-333333333333');
-SET LOCAL ROLE authenticated;
-SET LOCAL "request.jwt.claim.sub" TO '11111111-1111-1111-1111-111111111111';
+-- 35: Already liked profile disappears (Member B was liked by Member A)
 SELECT is(
-    (SELECT COUNT(*)::int FROM public.get_discovery_feed() WHERE user_id = '33333333-3333-3333-3333-333333333333'),
+    (SELECT COUNT(*)::int FROM public.get_discovery_feed() WHERE user_id = '22222222-2222-2222-2222-222222222222'),
     0,
     '35. Already liked profile disappears from discovery feed'
 );
-ROLLBACK TO sp_filter;
 
 -- 36: Already passed profile disappears
 SAVEPOINT sp_filter;
@@ -629,7 +645,7 @@ SELECT is(
 
 -- 41: Another member cannot fetch pending photo from storage.objects
 SELECT is(
-    (SELECT COUNT(*)::int FROM storage.objects WHERE bucket_id = 'photos' AND name = 'photos/22222222-2222-2222-2222-222222222222/photo2_pending.jpg'),
+    (SELECT COUNT(*)::int FROM storage.objects WHERE bucket_id = 'photos' AND name = '22222222-2222-2222-2222-222222222222/photo2_pending.jpg'),
     0,
     '41. Another member cannot fetch pending photo from storage.objects'
 );
@@ -652,14 +668,14 @@ SELECT throws_ok(
 
 -- 44: Member A cannot read Member B selfie from storage.objects
 SELECT is(
-    (SELECT COUNT(*)::int FROM storage.objects WHERE bucket_id = 'selfies' AND name = 'selfies/22222222-2222-2222-2222-222222222222/selfie.jpg'),
+    (SELECT COUNT(*)::int FROM storage.objects WHERE bucket_id = 'selfies' AND name = '22222222-2222-2222-2222-222222222222/selfie.jpg'),
     0,
     '44. Member cannot read another member selfie from storage.objects'
 );
 
 -- 45: Member A can read own selfie from storage.objects
 SELECT is(
-    (SELECT COUNT(*)::int FROM storage.objects WHERE bucket_id = 'selfies' AND name = 'selfies/11111111-1111-1111-1111-111111111111/selfie.jpg'),
+    (SELECT COUNT(*)::int FROM storage.objects WHERE bucket_id = 'selfies' AND name = '11111111-1111-1111-1111-111111111111/selfie.jpg'),
     1,
     '45. Member can read own selfie from storage.objects'
 );
@@ -667,7 +683,7 @@ SELECT is(
 -- 46: Admin can read any selfie from storage.objects
 SET LOCAL "request.jwt.claim.sub" TO '00000000-0000-0000-0000-000000000001';
 SELECT is(
-    (SELECT COUNT(*)::int FROM storage.objects WHERE bucket_id = 'selfies' AND name = 'selfies/22222222-2222-2222-2222-222222222222/selfie.jpg'),
+    (SELECT COUNT(*)::int FROM storage.objects WHERE bucket_id = 'selfies' AND name = '22222222-2222-2222-2222-222222222222/selfie.jpg'),
     1,
     '46. Admin can read any selfie from storage.objects'
 );
@@ -715,7 +731,7 @@ SELECT throws_ok(
 -- 51: Member cannot read other members' reports
 RESET ROLE;
 INSERT INTO public.reports (id, reporter, target, reason)
-VALUES ('77777777-0000-0000-0000-000000000001', '22222222-2222-2222-2222-222222222222', '33333333-3333-3333-3333-333333333333', 'spam')
+VALUES ('77777777-0000-0000-0000-000000000001', '22222222-2222-2222-2222-222222222222', '33333333-3333-3333-3333-333333333333', 'harassment')
 ON CONFLICT (id) DO NOTHING;
 
 SET LOCAL ROLE authenticated;
