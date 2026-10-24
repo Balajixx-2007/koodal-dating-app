@@ -73,11 +73,12 @@ jobs:
       - name: Publish execution logs to repository
         if: always()
         run: |
+          cp pg_tap_output.txt /tmp/pg_tap_output.txt || true
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git checkout -B ci-logs
+          git checkout -f -B ci-logs
           mkdir -p ci-artifacts
-          cp pg_tap_output.txt ci-artifacts/pg_tap_output.txt || true
-          git add ci-artifacts/
+          cp /tmp/pg_tap_output.txt ci-artifacts/pg_tap_output.txt || true
+          git add -A ci-artifacts/
           git commit -m "ci: publish latest pgTAP test results [skip ci]" || true
           git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git HEAD:refs/heads/ci-logs --force
