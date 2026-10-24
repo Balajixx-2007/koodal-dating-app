@@ -15,8 +15,7 @@ export const Navbar: React.FC = () => {
     matches, 
     reports, 
     selfieVerifications,
-    activeRole,
-    setActiveRole
+    activeRole
   } = useApp();
 
   const totalUnread = matches.reduce((acc, m) => acc + (m.unreadCount || 0), 0);
@@ -33,62 +32,14 @@ export const Navbar: React.FC = () => {
             {t.stat_cities} &bull; Intent-First Dating
           </span>
         </div>
-        {!import.meta.env.PROD ? (
-          <div className="flex items-center gap-2.5">
-            <span className="text-slate-400 text-[11px] hidden sm:inline">Role View (Dev):</span>
-            <div className="inline-flex rounded-full bg-slate-800 p-0.5 text-xs border border-slate-700">
-              <button
-                onClick={() => {
-                  setActiveRole('member');
-                  navigateTo('/discover');
-                }}
-                className={`px-3 py-0.5 rounded-full transition-all text-[11px] font-semibold ${
-                  activeRole === 'member' && !currentView.startsWith('/admin')
-                    ? 'bg-[#F20D4E] text-white shadow-sm'
-                    : 'text-slate-300 hover:text-white'
-                }`}
-              >
-                Member
-              </button>
-              <button
-                onClick={() => {
-                  setActiveRole('admin');
-                  navigateTo('/admin/reports');
-                }}
-                className={`px-3 py-0.5 rounded-full transition-all text-[11px] font-semibold flex items-center gap-1 ${
-                  currentView.startsWith('/admin')
-                    ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
-                    : 'text-slate-300 hover:text-white'
-                }`}
-              >
-                <ShieldAlert className="w-3 h-3 text-amber-400" />
-                <span>Admin ({pendingAdminItems})</span>
-              </button>
-              <button
-                onClick={() => {
-                  setActiveRole('visitor');
-                  navigateTo('/');
-                }}
-                className={`px-3 py-0.5 rounded-full transition-all text-[11px] font-semibold ${
-                  currentView === '/'
-                    ? 'bg-slate-700 text-white'
-                    : 'text-slate-300 hover:text-white'
-                }`}
-              >
-                Landing
-              </button>
-            </div>
-          </div>
-        ) : (
-          activeRole === 'admin' && (
-            <button
-              onClick={() => navigateTo('/admin/reports')}
-              className="px-3 py-0.5 rounded-full bg-amber-500 text-slate-950 text-[11px] font-bold flex items-center gap-1 shadow-sm"
-            >
-              <ShieldAlert className="w-3 h-3 text-slate-950" />
-              <span>Admin Portal ({pendingAdminItems})</span>
-            </button>
-          )
+        {activeRole === 'admin' && (
+          <button
+            onClick={() => navigateTo('/admin/reports')}
+            className="px-3 py-0.5 rounded-full bg-amber-500 text-slate-950 text-[11px] font-bold flex items-center gap-1 shadow-sm"
+          >
+            <ShieldAlert className="w-3 h-3 text-slate-950" />
+            <span>Admin Portal ({pendingAdminItems})</span>
+          </button>
         )}
       </div>
 

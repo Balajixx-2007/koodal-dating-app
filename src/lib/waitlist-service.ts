@@ -151,34 +151,53 @@ export class WaitlistService {
 
   /**
    * Executes batch admission for ratio control via admit_batch RPC.
+   * Supports both real DB schema (p_women_cap, p_dry_run) and simulation params (p_women_limit, p_men_limit).
    */
   static async executeBatchAdmission(
     city: string,
-    womenLimit: number,
-    menLimit: number,
+    womenLimit: number = 20,
+    menLimitOrDryRun: number | boolean = false,
     client: SupabaseClient<Database> = supabase
   ): Promise<{
     success: boolean;
     admittedWomen?: number;
     admittedMen?: number;
+    activeWomen?: number;
+    activeMen?: number;
+    ratioBefore?: number;
+    ratioAfter?: number;
+    isHealthy?: boolean;
     error?: string;
   }> {
     try {
-      const { data, error } = await client.rpc('admit_batch', {
-        p_city: city,
-        p_women_limit: womenLimit,
-        p_men_limit: menLimit
-      });
+      const isDryRun = typeof menLimitOrDryRun === 'boolean' ? menLimitOrDryRun : false;
+      const menLimit = typeof menLimitOrDryRun === 'number' ? menLimitOrDryRun : undefined;
+
+      const rpcArgs: any = { p_city: city };
+      if (typeof menLimitOrDryRun === 'boolean') {
+        rpcArgs.p_women_cap = womenLimit;
+        rpcArgs.p_dry_run = isDryRun;
+      } else {
+        rpcArgs.p_women_limit = womenLimit;
+        rpcArgs.p_men_limit = menLimit;
+      }
+
+      const { data, error } = await client.rpc('admit_batch', rpcArgs);
 
       if (error) {
         return { success: false, error: error.message };
       }
 
-      const row = data?.[0];
+      const row: any = Array.isArray(data) ? data[0] : (data || {});
       return {
         success: true,
-        admittedWomen: row?.admitted_women ?? 0,
-        admittedMen: row?.admitted_men ?? 0
+        admittedWomen: row?.women_admitted ?? row?.admitted_women ?? 0,
+        admittedMen: row?.men_admitted ?? row?.admitted_men ?? 0,
+        activeWomen: row?.active_women_registered ?? row?.effective_women_before ?? 0,
+        activeMen: row?.active_men_registered ?? row?.effective_men_before ?? 0,
+        ratioBefore: row?.ratio_before ?? 1.0,
+        ratioAfter: row?.ratio_after ?? 1.0,
+        isHealthy: row?.is_ratio_after_healthy ?? true
       };
     } catch (err: any) {
       return { success: false, error: err.message };
