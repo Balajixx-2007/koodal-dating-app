@@ -126,12 +126,6 @@ ERROR:  current transaction is aborted, commands ignored until end of transactio
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  savepoint "sp_filter" does not exist
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 ERROR:  savepoint "sp_filter" does not exist
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
@@ -198,6 +192,12 @@ ERROR:  current transaction is aborted, commands ignored until end of transactio
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 ERROR:  savepoint "sp_filter" does not exist
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ERROR:  savepoint "sp_filter" does not exist
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
@@ -291,114 +291,47 @@ ok 22 - 22. Discovery feed returns without error
 ok 23 - 23. get_discovery_feed() returns exact allowed columns (no email, birth_date, admin fields)
 ok 24 - 24. Blocked members cannot send messages to each other
 ok 25 - 25. Banned user cannot send messages
-ERROR:  Likes cannot be deleted
-CONTEXT:  PL/pgSQL function prevent_like_deletion() line 3 at RAISE
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  savepoint "sp_filter" does not exist
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  savepoint "sp_filter" does not exist
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  savepoint "sp_filter" does not exist
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  savepoint "sp_filter" does not exist
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  savepoint "sp_filter" does not exist
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  savepoint "sp_filter" does not exist
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  savepoint "sp_filter" does not exist
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  savepoint "sp_filter" does not exist
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  savepoint "sp_filter" does not exist
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  savepoint "sp_filter" does not exist
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  savepoint "sp_filter" does not exist
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
+not ok 26 - 26. Normal eligible profile appears in discovery feed
+# Failed test 26: "26. Normal eligible profile appears in discovery feed"
+#         have: 0
+#         want: 1
+ok 27 - 27. Paused profile disappears from discovery feed
+ok 28 - 28. Banned user profile disappears from discovery feed
+ok 29 - 29. Suspended user profile disappears from discovery feed
+ok 30 - 30. Unadmitted waitlist profile disappears from discovery feed
+ok 31 - 31. Profile with unapproved selfie disappears from discovery feed
+ok 32 - 32. Profile with no approved photo disappears from discovery feed
+ok 33 - 33. Profile blocked by caller disappears from discovery feed
+ok 34 - 34. Profile blocking caller disappears from discovery feed
+ERROR:  Daily like limit reached. Members are limited to 20 likes per rolling 24 hours.
+CONTEXT:  PL/pgSQL function enforce_daily_like_limit() line 24 at RAISE
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ok 35 - 36. Already passed profile disappears from discovery feed
+ok 36 - 37. Different city profile disappears from discovery feed
+ok 37 - 38. Caller does not appear in own discovery feed
+ok 38 - 39. Another member cannot fetch a pending photo from public.profile_photos
+ok 39 - 40. Another member cannot fetch a rejected photo from public.profile_photos
+ok 40 - 41. Another member cannot fetch pending photo from storage.objects
+not ok 41 - 42. Member cannot set their own photo status to approved
+# Failed test 41: "42. Member cannot set their own photo status to approved"
+#       caught: 42P17: infinite recursion detected in policy for relation "profile_photos"
+#       wanted: 42501
+ok 42 - 43. Member cannot upload under another member folder
+ok 43 - 44. Member cannot read another member selfie from storage.objects
+not ok 44 - 45. Member can read own selfie from storage.objects
+# Failed test 44: "45. Member can read own selfie from storage.objects"
+#         have: 0
+#         want: 1
+ok 45 - 46. Admin can read any selfie from storage.objects
+ok 46 - 47. Member cannot insert a verification row with result approved
+ok 47 - 48. Member cannot change their own users.status
+ok 48 - 49. Member cannot insert reports as another reporter
+ok 49 - 50. Member cannot report themselves
+ERROR:  invalid input value for enum report_reason: "spam"
+LINE 2: ...2222222222', '33333333-3333-3333-3333-333333333333', 'spam')
+                                                                ^
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
@@ -459,9 +392,10 @@ a22cb17b3b93: Verifying Checksum
 a22cb17b3b93: Download complete
 dcccee43ad5d: Verifying Checksum
 dcccee43ad5d: Download complete
+06d62d0de6d7: Verifying Checksum
+06d62d0de6d7: Download complete
 4f4fb700ef54: Verifying Checksum
 4f4fb700ef54: Download complete
-06d62d0de6d7: Download complete
 dcccee43ad5d: Pull complete
 06d62d0de6d7: Pull complete
 a22cb17b3b93: Pull complete
@@ -472,18 +406,22 @@ ghcr.io/supabase/pg_prove:3.36
 psql:/home/runner/work/koodal-dating-app/koodal-dating-app/supabase/tests/database_security_and_admissions.sql:9: NOTICE:  extension "pgtap" already exists, skipping
 /home/runner/work/koodal-dating-app/koodal-dating-app/supabase/tests/database_security_and_admissions.sql .. ok
 psql:/home/runner/work/koodal-dating-app/koodal-dating-app/supabase/tests/phase3_security_and_discovery.sql:8: NOTICE:  extension "pgtap" already exists, skipping
-psql:/home/runner/work/koodal-dating-app/koodal-dating-app/supabase/tests/phase3_security_and_discovery.sql:433: ERROR:  Likes cannot be deleted
-CONTEXT:  PL/pgSQL function prevent_like_deletion() line 3 at RAISE
+psql:/home/runner/work/koodal-dating-app/koodal-dating-app/supabase/tests/phase3_security_and_discovery.sql:565: ERROR:  Daily like limit reached. Members are limited to 20 likes per rolling 24 hours.
+CONTEXT:  PL/pgSQL function enforce_daily_like_limit() line 24 at RAISE
 /home/runner/work/koodal-dating-app/koodal-dating-app/supabase/tests/phase3_security_and_discovery.sql ..... 
+# Failed test 26: "26. Normal eligible profile appears in discovery feed"
+#         have: 0
+#         want: 1
 Dubious, test returned 3 (wstat 768, 0x300)
-Failed 40/65 subtests 
+Failed 32/65 subtests 
 
 Test Summary Report
 -------------------
-/home/runner/work/koodal-dating-app/koodal-dating-app/supabase/tests/phase3_security_and_discovery.sql   (Wstat: 768 (exited 3) Tests: 25 Failed: 0)
+/home/runner/work/koodal-dating-app/koodal-dating-app/supabase/tests/phase3_security_and_discovery.sql   (Wstat: 768 (exited 3) Tests: 34 Failed: 1)
+  Failed test:  26
   Non-zero exit status: 3
-  Parse errors: Bad plan.  You planned 65 tests but ran 25.
-Files=2, Tests=39,  1 wallclock secs ( 0.02 usr  0.01 sys +  0.01 cusr  0.00 csys =  0.04 CPU)
+  Parse errors: Bad plan.  You planned 65 tests but ran 34.
+Files=2, Tests=48,  1 wallclock secs ( 0.02 usr  0.01 sys +  0.01 cusr  0.01 csys =  0.05 CPU)
 Result: FAIL
 error running container: exit 1
 Try rerunning the command with --debug to troubleshoot the error.
