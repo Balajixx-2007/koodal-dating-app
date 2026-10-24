@@ -9,6 +9,7 @@ export default defineConfig({
     react()
   ],
   test: {
+    include: ['src/test/**/*.test.ts'],
     hookTimeout: 120000,
     testTimeout: 60000
   }
