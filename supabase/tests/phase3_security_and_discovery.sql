@@ -517,9 +517,9 @@ ROLLBACK TO sp_filter;
 
 -- 30: Unadmitted waitlist profile disappears
 SAVEPOINT sp_filter;
-RESET ROLE;
-UPDATE public.waitlist_entries SET status = 'waiting' WHERE user_id = '33333333-3333-3333-3333-333333333333';
 SET LOCAL ROLE authenticated;
+SET LOCAL "request.jwt.claim.sub" TO '00000000-0000-0000-0000-000000000001';
+UPDATE public.waitlist_entries SET status = 'waiting' WHERE user_id = '33333333-3333-3333-3333-333333333333';
 SET LOCAL "request.jwt.claim.sub" TO '11111111-1111-1111-1111-111111111111';
 SELECT is(
     (SELECT COUNT(*)::int FROM public.get_discovery_feed() WHERE user_id = '33333333-3333-3333-3333-333333333333'),
@@ -543,9 +543,9 @@ ROLLBACK TO sp_filter;
 
 -- 32: Profile with no approved photo disappears
 SAVEPOINT sp_filter;
-RESET ROLE;
-UPDATE public.profile_photos SET status = 'pending' WHERE owner = '33333333-3333-3333-3333-333333333333';
 SET LOCAL ROLE authenticated;
+SET LOCAL "request.jwt.claim.sub" TO '00000000-0000-0000-0000-000000000001';
+UPDATE public.profile_photos SET status = 'pending' WHERE owner = '33333333-3333-3333-3333-333333333333';
 SET LOCAL "request.jwt.claim.sub" TO '11111111-1111-1111-1111-111111111111';
 SELECT is(
     (SELECT COUNT(*)::int FROM public.get_discovery_feed() WHERE user_id = '33333333-3333-3333-3333-333333333333'),
@@ -761,6 +761,8 @@ SELECT is(
 -- ==============================================================================
 -- Match between A and B
 RESET ROLE;
+DELETE FROM public.blocks WHERE (blocker = '11111111-1111-1111-1111-111111111111' AND blocked = '22222222-2222-2222-2222-222222222222')
+                             OR (blocker = '22222222-2222-2222-2222-222222222222' AND blocked = '11111111-1111-1111-1111-111111111111');
 DO $$
 DECLARE v_mid UUID;
 BEGIN
@@ -775,7 +777,7 @@ END $$;
 -- 53: Non-participant (Member C) cannot read messages in Match(A, B)
 SET LOCAL ROLE authenticated;
 SET LOCAL "request.jwt.claim.sub" TO '33333333-3333-3333-3333-333333333333';
-SET LOCAL "request.jwt.claim.email" TO 'member_c@example.com';
+SET LOCAL "request.jwt.claim.email" TO 'member_c_phase3@example.com';
 
 SELECT is(
     (SELECT COUNT(*)::int FROM public.messages WHERE id = '99999999-0000-0000-0000-000000000005'),
