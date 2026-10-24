@@ -466,6 +466,50 @@ export interface Database {
         };
         Relationships: [];
       };
+      user_consents: {
+        Row: {
+          id: string;
+          user_id: string;
+          consent_type: string;
+          version: string;
+          granted: boolean;
+          ip_address: string | null;
+          user_agent: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          consent_type: string;
+          version?: string;
+          granted?: boolean;
+          ip_address?: string | null;
+          user_agent?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          consent_type?: string;
+          version?: string;
+          granted?: boolean;
+          ip_address?: string | null;
+          user_agent?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "user_consents_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -538,6 +582,10 @@ export interface Database {
       admit_batch: {
         Args: { p_city: string; p_women_limit?: number; p_men_limit?: number };
         Returns: { admitted_women: number; admitted_men: number }[];
+      };
+      delete_user_account: {
+        Args: { p_user_id: string };
+        Returns: { success: boolean; purged_user_id?: string };
       };
     };
   };

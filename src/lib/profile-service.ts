@@ -2,6 +2,7 @@ import { supabase } from './supabase';
 import type { Database, RelationshipIntent } from '../types/database';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Profile } from '../types';
+import { AccountDeletionService } from './account-deletion-service';
 
 export class ProfileService {
   /**
@@ -139,16 +140,26 @@ export class ProfileService {
   }
 
   /**
-   * Signs the active member out cleanly.
+   * Signs out the user and cascades deletion of storage files and database records.
    */
   static async deleteAccount(
     client: SupabaseClient<Database> = supabase
   ): Promise<{ success: boolean; error?: string }> {
     try {
-      await client.auth.signOut();
+      let userId: string | undefined;
+      if (typeof client.auth?.getUser === 'function') {
+        const { data } = await client.auth.getUser();
+        userId = data?.user?.id;
+      }
+      if (userId) {
+        return await AccountDeletionService.deleteAccount(userId, client);
+      }
+      if (typeof client.auth?.signOut === 'function') {
+        await client.auth.signOut();
+      }
       return { success: true };
     } catch (err: any) {
-      return { success: false, error: err.message || 'Failed to sign out' };
+      return { success: false, error: err.message || 'Failed to delete account' };
     }
   }
 }

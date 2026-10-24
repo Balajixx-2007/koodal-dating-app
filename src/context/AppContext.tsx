@@ -19,6 +19,8 @@ import { ModerationService } from '../lib/moderation-service';
 import { WaitlistService } from '../lib/waitlist-service';
 import { ProfileService } from '../lib/profile-service';
 import { EmailService } from '../lib/email-service';
+import { AccountDeletionService } from '../lib/account-deletion-service';
+import { ConsentService } from '../lib/consent-service';
 
 interface AppContextType {
   language: Language;
@@ -535,17 +537,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteAccount = async () => {
     try {
-      await ProfileService.deleteAccount();
-    } catch {
-      // ignore
+      if (currentUser?.id) {
+        await AccountDeletionService.deleteAccount(currentUser.id);
+      } else {
+        await ProfileService.deleteAccount();
+      }
+    } catch (err) {
+      console.warn('Account deletion encountered warning:', err);
     }
     localStorage.clear();
     setCurrentUser(null);
+    setUserWaitlistStatus(null);
     setMyProfile(INITIAL_MY_PROFILE);
     setMatches([]);
     setMessages({});
     setActiveRole('visitor');
-    navigateTo('/');
+    navigateTo('/waitlist');
   };
 
   // Filter profiles for discovery
