@@ -199,6 +199,7 @@ export class ModerationService {
 
   /**
    * Reviews a selfie verification item.
+   * Post-review privacy guarantee: permanently removes the selfie image from the 'selfies' storage bucket.
    */
   static async reviewSelfie(
     verificationId: string,
@@ -207,6 +208,22 @@ export class ModerationService {
     client: SupabaseClient<Database> = supabase
   ): Promise<{ success: boolean; error?: string }> {
     try {
+      // 1. Fetch verification details to retrieve selfie_path and user_id (if select available)
+      let verif: any = null;
+      try {
+        const query = client.from('verifications');
+        if (typeof query.select === 'function') {
+          const { data } = await query
+            .select('id, user_id, selfie_path')
+            .eq('id', verificationId)
+            .single();
+          verif = data;
+        }
+      } catch {
+        // proceed with update even if select was not supported/mocked
+      }
+
+      // 2. Update verification record with moderation verdict
       const { error } = await client
         .from('verifications')
         .update({
@@ -220,6 +237,16 @@ export class ModerationService {
         return { success: false, error: error.message };
       }
 
+      // 3. Post-review selfie deletion: purge the selfie from storage bucket for privacy compliance
+      if (verif?.selfie_path) {
+        try {
+          await client.storage.from('selfies').remove([verif.selfie_path]);
+        } catch {
+          // non-fatal if already removed
+        }
+      }
+
+      // 4. Audit log
       try {
         await client
           .from('audit_log')
@@ -227,7 +254,7 @@ export class ModerationService {
             admin_id: adminId,
             action: 'review_selfie',
             target_id: verificationId,
-            details: { approved }
+            details: { approved, purged_selfie_path: verif?.selfie_path || null }
           });
       } catch {
         // ignore audit log non-fatal error

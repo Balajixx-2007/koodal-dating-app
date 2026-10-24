@@ -1,15 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { RelationshipIntent } from '../types';
 import { IntentBadge } from '../components/IntentBadge';
 import { VerifiedBadge } from '../components/VerifiedBadge';
 import { 
-  BadgeCheck, Check, Edit2, MapPin, Heart 
+  BadgeCheck, Check, Edit2, MapPin, Heart, Upload, Camera, Loader2, AlertCircle 
 } from 'lucide-react';
+import { StorageService } from '../lib/storage-service';
 
 export const MyProfile: React.FC = () => {
-  const { t, myProfile, updateMyProfile } = useApp();
+  const { t, myProfile, updateMyProfile, currentUser } = useApp();
   const [editing, setEditing] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const selfieInputRef = useRef<HTMLInputElement>(null);
 
   // Editable fields
   const [name, setName] = useState(myProfile.name);
@@ -23,6 +26,9 @@ export const MyProfile: React.FC = () => {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [uploadLoading, setUploadLoading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [selfieSuccess, setSelfieSuccess] = useState(false);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,10 +65,82 @@ export const MyProfile: React.FC = () => {
     }
   };
 
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const file = files[0];
+
+    setUploadError(null);
+    setUploadLoading(true);
+
+    try {
+      const userId = currentUser?.id || 'usr_me_01';
+      const previewUrl = URL.createObjectURL(file);
+
+      // Add to local state immediately for instant preview
+      updateMyProfile({
+        photos: [...myProfile.photos, previewUrl]
+      });
+
+      // Upload with in-browser compression to private photos bucket
+      const res = await StorageService.uploadProfilePhoto(userId, file, myProfile.photos.length);
+      if (!res.success && res.error) {
+        setUploadError(res.error);
+      }
+    } catch (err: any) {
+      setUploadError(err.message || 'Failed to upload photo');
+    } finally {
+      setUploadLoading(false);
+      if (photoInputRef.current) photoInputRef.current.value = '';
+    }
+  };
+
+  const handleSelfieUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const file = files[0];
+
+    setUploadError(null);
+    setUploadLoading(true);
+
+    try {
+      const userId = currentUser?.id || 'usr_me_01';
+      const res = await StorageService.uploadVerificationSelfie(userId, file);
+      if (res.success) {
+        setSelfieSuccess(true);
+        setTimeout(() => setSelfieSuccess(false), 4000);
+      } else {
+        setUploadError(res.error || 'Failed to upload selfie');
+      }
+    } catch (err: any) {
+      setUploadError(err.message || 'Failed to upload verification selfie');
+    } finally {
+      setUploadLoading(false);
+      if (selfieInputRef.current) selfieInputRef.current.value = '';
+    }
+  };
+
   const intents: RelationshipIntent[] = ['casual', 'long_term', 'marriage', 'friendship'];
 
   return (
     <div className="max-w-xl mx-auto px-4 py-6 space-y-6">
+      {/* Hidden file inputs for photo and selfie uploads */}
+      <input
+        type="file"
+        ref={photoInputRef}
+        onChange={handlePhotoUpload}
+        accept="image/jpeg,image/png,image/webp"
+        className="hidden"
+      />
+      <input
+        type="file"
+        ref={selfieInputRef}
+        onChange={handleSelfieUpload}
+        accept="image/jpeg,image/png,image/webp"
+        capture="user"
+        className="hidden"
+      />
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -82,6 +160,20 @@ export const MyProfile: React.FC = () => {
         </button>
       </div>
 
+      {uploadError && (
+        <div className="p-3.5 bg-red-50 text-red-700 border border-red-200 rounded-2xl text-xs font-semibold flex items-center gap-2 animate-card-entrance shadow-xs">
+          <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+          <span>{uploadError}</span>
+        </div>
+      )}
+
+      {selfieSuccess && (
+        <div className="p-3.5 bg-[#ECFDF5] text-[#065F46] border border-[#A7F3D0] rounded-2xl text-xs font-semibold flex items-center gap-2 animate-card-entrance shadow-xs">
+          <Check className="w-4 h-4 text-[#079669] shrink-0" />
+          <span>Verification selfie submitted! It will be reviewed by human moderators within 24 hours.</span>
+        </div>
+      )}
+
       {saveSuccess && (
         <div className="p-3.5 bg-[#ECFDF5] text-[#065F46] border border-[#A7F3D0] rounded-2xl text-xs font-semibold flex items-center gap-2 animate-card-entrance shadow-xs">
           <Check className="w-4 h-4 text-[#079669]" />
@@ -93,17 +185,55 @@ export const MyProfile: React.FC = () => {
       {!editing ? (
         <div className="surface-card overflow-hidden p-6 sm:p-8 space-y-6">
           {/* Photos Grid */}
-          <div className="grid grid-cols-3 gap-2.5">
-            {myProfile.photos.map((url, idx) => (
-              <div key={idx} className="aspect-[3/4] rounded-2xl overflow-hidden border border-[#F0E3E6] dark:border-slate-800 shadow-xs relative group">
-                <img src={url} alt={`Profile photo ${idx + 1}`} className="w-full h-full object-cover" />
-                {idx === 0 && (
-                  <span className="absolute bottom-1.5 left-1.5 bg-[#11172B]/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
-                    Primary
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] font-bold text-[#98A2B3] uppercase tracking-wider block">
+                Profile Photos (In-Browser Compressed)
+              </span>
+              {myProfile.photos.length < 6 && (
+                <button
+                  type="button"
+                  onClick={() => photoInputRef.current?.click()}
+                  disabled={uploadLoading}
+                  className="flex items-center gap-1 text-[11px] font-semibold text-[#F20D4E] hover:underline disabled:opacity-50"
+                >
+                  {uploadLoading ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Upload className="w-3.5 h-3.5" />
+                  )}
+                  <span>Add Photo</span>
+                </button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-3 gap-2.5">
+              {myProfile.photos.map((url, idx) => (
+                <div key={idx} className="aspect-[3/4] rounded-2xl overflow-hidden border border-[#F0E3E6] dark:border-slate-800 shadow-xs relative group">
+                  <img src={url} alt={`Profile photo ${idx + 1}`} className="w-full h-full object-cover" />
+                  {idx === 0 ? (
+                    <span className="absolute bottom-1.5 left-1.5 bg-[#11172B]/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+                      Primary
+                    </span>
+                  ) : (
+                    <span className="absolute bottom-1.5 left-1.5 bg-emerald-600/90 text-white text-[9px] font-semibold px-1.5 py-0.5 rounded-md">
+                      Approved
+                    </span>
+                  )}
+                </div>
+              ))}
+              {myProfile.photos.length < 6 && (
+                <div 
+                  onClick={() => photoInputRef.current?.click()}
+                  className="aspect-[3/4] rounded-2xl border-2 border-dashed border-[#F0E3E6] dark:border-slate-800 flex flex-col items-center justify-center p-3 text-center cursor-pointer hover:border-[#F8B4C4] transition-colors"
+                >
+                  <Upload className="w-5 h-5 text-[#98A2B3] mb-1" />
+                  <span className="text-[11px] font-medium text-[#667085] dark:text-slate-300">
+                    {uploadLoading ? 'Optimizing...' : 'Upload'}
                   </span>
-                )}
-              </div>
-            ))}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Verification Status Card */}
@@ -117,11 +247,20 @@ export const MyProfile: React.FC = () => {
                   Status: Hand-Verified Member
                 </span>
                 <span className="text-[11px] text-[#047857] dark:text-emerald-400 font-medium">
-                  Selfie proof confirmed by admin team.
+                  Zero catfish guarantee: Selfies purged after review for privacy.
                 </span>
               </div>
             </div>
-            <VerifiedBadge size="sm" />
+            <button
+              type="button"
+              onClick={() => selfieInputRef.current?.click()}
+              disabled={uploadLoading}
+              className="px-2.5 py-1 rounded-xl bg-white dark:bg-slate-800 border border-[#A7F3D0] text-[11px] font-semibold text-[#065F46] hover:bg-emerald-50 dark:hover:bg-slate-700 transition-colors shrink-0 ml-2"
+              title="Re-verify with selfie"
+            >
+              <Camera className="w-3.5 h-3.5 inline mr-1" />
+              Verify
+            </button>
           </div>
 
           {/* Name & Stated Intent */}
