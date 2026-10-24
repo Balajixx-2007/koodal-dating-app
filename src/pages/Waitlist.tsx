@@ -19,7 +19,7 @@ export const Waitlist: React.FC = () => {
   const [ageConfirmed, setAgeConfirmed] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
@@ -34,15 +34,18 @@ export const Waitlist: React.FC = () => {
 
     const selectedCity = city === 'Other' ? (customCity.trim() || 'Other') : city;
 
-    joinWaitlist({
-      email,
-      city: selectedCity,
-      gender,
-      intent,
-      referralCode: referralCode.trim() || undefined
-    });
-
-    navigateTo('/waitlist/status');
+    try {
+      await joinWaitlist({
+        email,
+        city: selectedCity,
+        gender,
+        intent,
+        referralCode: referralCode.trim() || undefined
+      });
+      navigateTo('/waitlist/status');
+    } catch (err: any) {
+      setError(err.message || 'Unable to join waitlist. Please try again.');
+    }
   };
 
   return (

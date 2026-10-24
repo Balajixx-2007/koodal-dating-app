@@ -15,6 +15,8 @@ import { supabase } from '../lib/supabase';
 import { resolveUserRole } from '../lib/auth-service';
 import { DiscoveryService } from '../lib/discovery-service';
 import { ChatService } from '../lib/chat-service';
+import { ModerationService } from '../lib/moderation-service';
+import { WaitlistService } from '../lib/waitlist-service';
 
 interface AppContextType {
   language: Language;
@@ -60,26 +62,26 @@ interface AppContextType {
   
   // Safety & Moderation
   blockedUsers: string[];
-  blockUser: (userId: string) => void;
+  blockUser: (userId: string) => Promise<void> | void;
   reports: Report[];
-  submitReport: (targetId: string, targetName: string, targetPhoto: string, reason: Report['reason'], details: string) => void;
+  submitReport: (targetId: string, targetName: string, targetPhoto: string, reason: Report['reason'], details: string) => Promise<void> | void;
   
   // Admin queues
   selfieVerifications: SelfieVerification[];
   photoModerations: PhotoModerationItem[];
   allUsers: User[];
-  reviewReport: (reportId: string, action: 'warn' | 'suspend' | 'ban' | 'dismiss') => void;
-  reviewSelfie: (selfieId: string, approved: boolean) => void;
-  reviewPhoto: (photoId: string, approved: boolean) => void;
-  toggleUserBan: (userId: string) => void;
+  reviewReport: (reportId: string, action: 'warn' | 'suspend' | 'ban' | 'dismiss') => Promise<void> | void;
+  reviewSelfie: (selfieId: string, approved: boolean) => Promise<void> | void;
+  reviewPhoto: (photoId: string, approved: boolean) => Promise<void> | void;
+  toggleUserBan: (userId: string) => Promise<void> | void;
 
   // Waitlist & Ratio Control
   waitlistEntries: WaitlistEntry[];
   admissionBatches: AdmissionBatch[];
   userWaitlistStatus: WaitlistEntry | null;
-  joinWaitlist: (data: { email: string; city: string; gender: 'woman' | 'man' | 'non_binary' | 'other'; intent: RelationshipIntent; referralCode?: string }) => WaitlistEntry;
+  joinWaitlist: (data: { email: string; city: string; gender: 'woman' | 'man' | 'non_binary' | 'other'; intent: RelationshipIntent; referralCode?: string }) => Promise<WaitlistEntry> | WaitlistEntry;
   boostWaitlistEntry: (entryId: string, task: 'selfie' | 'profile' | 'referral') => void;
-  runBatchAdmission: (city: string, womenToAdmit: number, menToAdmit: number) => { womenAdmitted: number; menAdmitted: number; newRatio: number };
+  runBatchAdmission: (city: string, womenToAdmit: number, menToAdmit: number) => Promise<{ womenAdmitted: number; menAdmitted: number; newRatio: number }> | { womenAdmitted: number; menAdmitted: number; newRatio: number };
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -696,13 +698,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const blockUser = (userId: string) => {
+  const blockUser = async (userId: string) => {
     setBlockedUsers(prev => [...prev, userId]);
-    // Remove from matches if exists
-    setMatches(prev => prev.filter(m => m.matchedProfile.userId !== userId));
+    // Remove from matches and discovery immediately
+    setMatches(prev => prev.filter(m => m.matchedProfile.userId !== userId && m.matchedProfile.id !== userId));
+    setProfiles(prev => prev.filter(p => p.userId !== userId && p.id !== userId));
+
+    if (currentUser?.id) {
+      await ModerationService.blockUser(currentUser.id, userId);
+    }
   };
 
-  const submitReport = (
+  const submitReport = async (
     targetId: string, 
     targetName: string, 
     targetPhoto: string, 
@@ -721,10 +728,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdAt: new Date().toISOString()
     };
     setReports(prev => [newReport, ...prev]);
-    blockUser(targetId);
+
+    if (currentUser?.id) {
+      await ModerationService.submitReport(currentUser.id, targetId, reason, details);
+    }
+    await blockUser(targetId);
   };
 
-  const reviewReport = (reportId: string, action: 'warn' | 'suspend' | 'ban' | 'dismiss') => {
+  const reviewReport = async (reportId: string, action: 'warn' | 'suspend' | 'ban' | 'dismiss') => {
+    const targetReport = reports.find(r => r.id === reportId);
+    const targetUserId = targetReport?.targetId;
+
     setReports(prev => prev.map(r => {
       if (r.id === reportId) {
         const statusMap = {
@@ -736,20 +750,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return {
           ...r,
           status: statusMap[action],
-          reviewedBy: 'Admin Balaji'
+          reviewedBy: currentUser?.email || 'Admin'
         };
       }
       return r;
     }));
+
+    if (currentUser?.id) {
+      await ModerationService.reviewReport(reportId, action, currentUser.id, supabase, targetUserId);
+    }
   };
 
-  const reviewSelfie = (selfieId: string, approved: boolean) => {
+  const reviewSelfie = async (selfieId: string, approved: boolean) => {
     setSelfieVerifications(prev => prev.map(s => {
       if (s.id === selfieId) {
         return {
           ...s,
           status: approved ? 'approved' : 'rejected',
-          reviewedBy: 'Admin Balaji'
+          reviewedBy: currentUser?.email || 'Admin'
         };
       }
       return s;
@@ -765,9 +783,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return p;
       }));
     }
+
+    if (currentUser?.id) {
+      await ModerationService.reviewSelfie(selfieId, approved, currentUser.id);
+    }
   };
 
-  const reviewPhoto = (photoId: string, approved: boolean) => {
+  const reviewPhoto = async (photoId: string, approved: boolean) => {
     setPhotoModerations(prev => prev.map(ph => {
       if (ph.id === photoId) {
         return {
@@ -777,27 +799,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       return ph;
     }));
+
+    if (currentUser?.id) {
+      await ModerationService.reviewPhoto(photoId, approved, currentUser.id);
+    }
   };
 
-  const toggleUserBan = (userId: string) => {
+  const toggleUserBan = async (userId: string) => {
+    const targetUser = allUsers.find(u => u.id === userId);
+    const newStatus = targetUser?.status === 'banned' ? 'active' : 'banned';
+
     setAllUsers(prev => prev.map(u => {
       if (u.id === userId) {
         return {
           ...u,
-          status: u.status === 'banned' ? 'active' : 'banned'
+          status: newStatus
         };
       }
       return u;
     }));
+
+    if (currentUser?.id) {
+      await ModerationService.toggleUserStatus(userId, newStatus, currentUser.id);
+    }
   };
 
-  const joinWaitlist = (data: {
+  const joinWaitlist = async (data: {
     email: string;
     city: string;
     gender: 'woman' | 'man' | 'non_binary' | 'other';
     intent: RelationshipIntent;
     referralCode?: string;
-  }): WaitlistEntry => {
+  }): Promise<WaitlistEntry> => {
     const isLaunchCity = data.city.toLowerCase().includes('chennai') || data.city.toLowerCase().includes('bangalore');
     const lane = (data.gender === 'woman' || data.gender === 'non_binary' || data.gender === 'other')
       ? 'women_and_others'
@@ -809,8 +842,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (isLaunchCity) initialScore += 20;
     if (data.referralCode) initialScore += 10;
 
+    let createdId = `wl_${Date.now()}`;
+
+    if (currentUser?.id) {
+      const res = await WaitlistService.joinWaitlist({
+        userId: currentUser.id,
+        email: data.email,
+        city: data.city,
+        gender: data.gender,
+        intent: data.intent,
+        referredBy: data.referralCode
+      });
+      if (res.success && res.entry?.id) {
+        createdId = res.entry.id;
+        initialScore = res.entry.score || initialScore;
+      }
+    }
+
     const newEntry: WaitlistEntry = {
-      id: `wl_${Date.now()}`,
+      id: createdId,
       email: data.email,
       city: data.city,
       gender: data.gender,
@@ -865,20 +915,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
   };
 
-  const runBatchAdmission = (city: string, womenToAdmit: number, menToAdmit: number) => {
+  const runBatchAdmission = async (city: string, womenToAdmit: number, menToAdmit: number) => {
     const activeWomen = 40;
     const activeMen = 50;
     const ratioBefore = Number((activeMen / Math.max(1, activeWomen)).toFixed(2));
 
+    let actualWomen = womenToAdmit;
+    let actualMen = menToAdmit;
+
+    if (currentUser?.id) {
+      const res = await WaitlistService.executeBatchAdmission(city, womenToAdmit, menToAdmit);
+      if (res.success) {
+        actualWomen = res.admittedWomen ?? womenToAdmit;
+        actualMen = res.admittedMen ?? menToAdmit;
+      }
+    }
+
     const eligibleWomen = waitlistEntries
       .filter(w => w.city.toLowerCase().includes(city.toLowerCase()) && w.lane === 'women_and_others' && w.status === 'waiting')
       .sort((a, b) => b.score - a.score)
-      .slice(0, womenToAdmit);
+      .slice(0, actualWomen);
 
     const eligibleMen = waitlistEntries
       .filter(w => w.city.toLowerCase().includes(city.toLowerCase()) && w.lane === 'men' && w.status === 'waiting')
       .sort((a, b) => b.score - a.score)
-      .slice(0, menToAdmit);
+      .slice(0, actualMen);
 
     const admittedIds = new Set([...eligibleWomen.map(w => w.id), ...eligibleMen.map(m => m.id)]);
 
@@ -893,16 +954,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return w;
     }));
 
-    const newActiveWomen = activeWomen + eligibleWomen.length;
-    const newActiveMen = activeMen + eligibleMen.length;
+    const newActiveWomen = activeWomen + actualWomen;
+    const newActiveMen = activeMen + actualMen;
     const ratioAfter = Number((newActiveMen / Math.max(1, newActiveWomen)).toFixed(2));
 
     const newBatch: AdmissionBatch = {
       id: `batch_${Date.now()}`,
       city,
       date: new Date().toISOString().split('T')[0],
-      womenAdmitted: eligibleWomen.length,
-      menAdmitted: eligibleMen.length,
+      womenAdmitted: actualWomen,
+      menAdmitted: actualMen,
       ratioBefore,
       ratioAfter
     };
@@ -916,8 +977,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
 
     return {
-      womenAdmitted: eligibleWomen.length,
-      menAdmitted: eligibleMen.length,
+      womenAdmitted: actualWomen,
+      menAdmitted: actualMen,
       newRatio: ratioAfter
     };
   };
