@@ -7,6 +7,7 @@ import { MatchModal } from './components/MatchModal';
 // Pages
 import { Home } from './pages/Home';
 import { Auth } from './pages/Auth';
+import { AuthCallback } from './pages/AuthCallback';
 import { Onboarding } from './pages/Onboarding';
 import { Discover } from './pages/Discover';
 import { ProfileDetail } from './pages/ProfileDetail';
@@ -41,6 +42,8 @@ export const MainContent: React.FC = () => {
         return <Auth isSignUp={true} />;
       case '/login':
         return <Auth isSignUp={false} />;
+      case '/auth/callback':
+        return <AuthCallback />;
       case '/onboarding':
         return <Onboarding />;
       case '/discover':

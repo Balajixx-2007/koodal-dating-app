@@ -26,6 +26,29 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children, activeTab })
   const pendingPhotosCount = photoModerations.filter(p => p.status === 'pending').length;
   const waitingWaitlistCount = waitlistEntries.filter(w => w.status === 'waiting').length;
 
+  if (activeRole !== 'admin') {
+    return (
+      <div className="max-w-md mx-auto px-4 py-16 text-center">
+        <div className="w-16 h-16 rounded-2xl bg-rose-100 dark:bg-rose-950/60 text-[#DC2626] flex items-center justify-center mx-auto mb-4">
+          <ShieldAlert className="w-8 h-8" />
+        </div>
+        <h2 className="text-xl font-bold text-[#15182B] dark:text-white">
+          Access Restricted
+        </h2>
+        <p className="text-xs text-[#667085] dark:text-slate-400 mt-2">
+          This area is restricted to authorized Koodal administrators only. Non-admin members cannot view or manage moderation queues.
+        </p>
+        <button
+          onClick={() => navigateTo('/discover')}
+          className="mt-6 px-5 py-2.5 btn-primary-rose text-xs inline-flex items-center gap-2"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span>Return to Discovery</span>
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
       {/* Admin Top Header in Deep Navy */}
