@@ -225,7 +225,7 @@ DECLARE v_mid UUID;
 BEGIN
     SELECT id INTO v_mid FROM public.matches LIMIT 1;
     INSERT INTO public.messages (id, match_id, sender_id, body)
-    VALUES ('mmmmmmmm-0000-0000-0000-000000000001', v_mid, '11111111-1111-1111-1111-111111111111', 'Hello')
+    VALUES ('99999999-0000-0000-0000-000000000001', v_mid, '11111111-1111-1111-1111-111111111111', 'Hello')
     ON CONFLICT (id) DO NOTHING;
 END $$;
 
@@ -235,7 +235,7 @@ SET LOCAL "request.jwt.claim.sub" TO '11111111-1111-1111-1111-111111111111';
 SET LOCAL "request.jwt.claim.email" TO 'member_a@example.com';
 
 PREPARE test_tamper_msg_read AS
-    UPDATE public.messages SET read_at = NOW() WHERE id = 'mmmmmmmm-0000-0000-0000-000000000001';
+    UPDATE public.messages SET read_at = NOW() WHERE id = '99999999-0000-0000-0000-000000000001';
 
 SELECT throws_ok(
     'test_tamper_msg_read',
