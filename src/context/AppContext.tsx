@@ -14,6 +14,7 @@ import confetti from 'canvas-confetti';
 import { supabase } from '../lib/supabase';
 import { resolveUserRole } from '../lib/auth-service';
 import { DiscoveryService } from '../lib/discovery-service';
+import { ChatService } from '../lib/chat-service';
 
 interface AppContextType {
   language: Language;
@@ -50,7 +51,12 @@ interface AppContextType {
   // Matches & Chat
   matches: Match[];
   messages: Record<string, Message[]>;
-  sendMessage: (matchId: string, body: string) => void;
+  sendMessage: (matchId: string, body: string) => Promise<boolean> | void;
+  isLoadingMatches: boolean;
+  matchesError: string | null;
+  refreshMatches: () => Promise<void>;
+  fetchMessagesForMatch: (matchId: string) => Promise<void>;
+  markMatchAsRead: (matchId: string) => Promise<void>;
   
   // Safety & Moderation
   blockedUsers: string[];
@@ -289,10 +295,105 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : INITIAL_MATCHES;
   });
 
+  const [isLoadingMatches, setIsLoadingMatches] = useState(false);
+  const [matchesError, setMatchesError] = useState<string | null>(null);
+
+  const formatMessageTime = (dateStr: string | null): string => {
+    if (!dateStr) return 'New';
+    const d = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - d.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    const isToday = d.toDateString() === now.toDateString();
+    if (isToday) {
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+    return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  };
+
+  const refreshMatches = useCallback(async () => {
+    if (!currentUser?.id) return;
+    setIsLoadingMatches(true);
+    setMatchesError(null);
+    try {
+      const res = await ChatService.fetchMatchesList();
+      if (res.success) {
+        const mappedMatches: Match[] = res.matches.map(m => ({
+          id: m.match_id,
+          userA: currentUser.id,
+          userB: m.matched_user_id,
+          createdAt: m.last_message_sent_at || new Date().toISOString(),
+          matchedProfile: {
+            id: m.matched_user_id,
+            userId: m.matched_user_id,
+            name: m.name,
+            age: m.age,
+            city: m.city,
+            gender: 'other',
+            intent: m.intent,
+            bio: '',
+            photos: m.avatar_url ? [m.avatar_url] : ['https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80'],
+            verificationStatus: 'verified',
+            interests: [],
+            prompts: []
+          },
+          lastMessage: m.last_message_body || 'Connected! Start talking.',
+          lastMessageTime: formatMessageTime(m.last_message_sent_at),
+          unreadCount: m.unread_count || 0
+        }));
+        setMatches(mappedMatches);
+      } else {
+        if (res.offline) {
+          setMatchesError('You are offline. Showing cached matches.');
+        } else {
+          setMatchesError(res.error || 'Failed to load matches.');
+        }
+      }
+    } catch (err: any) {
+      setMatchesError(err.message || 'Error loading matches.');
+    } finally {
+      setIsLoadingMatches(false);
+    }
+  }, [currentUser?.id]);
+
+  useEffect(() => {
+    if (currentUser?.id) {
+      refreshMatches();
+    }
+  }, [currentUser?.id, refreshMatches]);
+
   const [messages, setMessages] = useState<Record<string, Message[]>>(() => {
     const saved = localStorage.getItem('koodal_messages');
     return saved ? JSON.parse(saved) : INITIAL_MESSAGES;
   });
+
+  const fetchMessagesForMatch = useCallback(async (matchId: string) => {
+    if (!matchId) return;
+    const res = await ChatService.fetchMessages(matchId);
+    if (res.success) {
+      const mapped: Message[] = res.messages.map(m => ({
+        id: m.id,
+        matchId: m.match_id,
+        senderId: m.sender_id,
+        body: m.body,
+        sentAt: m.sent_at,
+        readAt: m.read_at || undefined
+      }));
+      setMessages(prev => ({
+        ...prev,
+        [matchId]: mapped
+      }));
+    }
+  }, []);
+
+  const markMatchAsRead = useCallback(async (matchId: string) => {
+    setMatches(prev => prev.map(m => m.id === matchId ? { ...m, unreadCount: 0 } : m));
+    if (currentUser?.id) {
+      await ChatService.markMessagesRead(matchId);
+    }
+  }, [currentUser?.id]);
 
   const [reports, setReports] = useState<Report[]>(() => {
     const saved = localStorage.getItem('koodal_reports');
@@ -486,71 +587,113 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const sendMessage = (matchId: string, body: string) => {
-    if (!body.trim()) return;
-    const newMsg: Message = {
-      id: `msg_${Date.now()}`,
-      matchId,
-      senderId: currentUser?.id || 'usr_me_01',
-      body,
-      sentAt: new Date().toISOString()
-    };
+  const sendMessage = async (matchId: string, body: string): Promise<boolean> => {
+    if (!body.trim()) return false;
+    const trimmed = body.trim();
+    const senderId = currentUser?.id;
 
-    setMessages(prev => ({
-      ...prev,
-      [matchId]: [...(prev[matchId] || []), newMsg]
-    }));
-
-    // Update match preview
-    setMatches(prev => prev.map(m => {
-      if (m.id === matchId) {
-        return {
-          ...m,
-          lastMessage: body,
-          lastMessageTime: 'Just now'
-        };
-      }
-      return m;
-    }));
-
-    // Automated thoughtful reply simulation after 2.5s for realism!
-    setTimeout(() => {
-      const match = matches.find(m => m.id === matchId);
-      if (match) {
-        const replyResponses = [
-          `That really resonates with me! I feel the exact same way.`,
-          `Haha, that's such a great answer. What else do you like doing around ${match.matchedProfile.city}?`,
-          `I love that you mentioned this. It's so rare to find someone who is so upfront about what they want!`,
-          `Totally agree! Would love to know more about your favorite spots in Chennai.`
-        ];
-        const randomReply = replyResponses[Math.floor(Math.random() * replyResponses.length)];
-        
-        const incomingMsg: Message = {
-          id: `msg_in_${Date.now()}`,
-          matchId,
-          senderId: match.matchedProfile.userId,
-          body: randomReply,
-          sentAt: new Date().toISOString()
+    if (senderId) {
+      const res = await ChatService.sendMessage(matchId, senderId, trimmed);
+      if (res.success && res.message) {
+        const newMsg: Message = {
+          id: res.message.id,
+          matchId: res.message.match_id,
+          senderId: res.message.sender_id,
+          body: res.message.body,
+          sentAt: res.message.sent_at,
+          readAt: res.message.read_at || undefined
         };
 
-        setMessages(prev => ({
-          ...prev,
-          [matchId]: [...(prev[matchId] || []), incomingMsg]
-        }));
+        setMessages(prev => {
+          const list = prev[matchId] || [];
+          if (list.some(m => m.id === newMsg.id)) return prev;
+          return {
+            ...prev,
+            [matchId]: [...list, newMsg]
+          };
+        });
 
         setMatches(prev => prev.map(m => {
           if (m.id === matchId) {
             return {
               ...m,
-              lastMessage: randomReply,
-              lastMessageTime: 'Just now',
-              unreadCount: (m.unreadCount || 0) + 1
+              lastMessage: trimmed,
+              lastMessageTime: 'Just now'
             };
           }
           return m;
         }));
+
+        return true;
+      } else {
+        return false;
       }
-    }, 2200);
+    } else {
+      const newMsg: Message = {
+        id: `msg_${Date.now()}`,
+        matchId,
+        senderId: 'usr_me_01',
+        body: trimmed,
+        sentAt: new Date().toISOString()
+      };
+
+      setMessages(prev => ({
+        ...prev,
+        [matchId]: [...(prev[matchId] || []), newMsg]
+      }));
+
+      setMatches(prev => prev.map(m => {
+        if (m.id === matchId) {
+          return {
+            ...m,
+            lastMessage: trimmed,
+            lastMessageTime: 'Just now'
+          };
+        }
+        return m;
+      }));
+
+      // Automated thoughtful reply simulation after 2.5s for realism in guest preview mode!
+      setTimeout(() => {
+        const match = matches.find(m => m.id === matchId);
+        if (match) {
+          const replyResponses = [
+            `That really resonates with me! I feel the exact same way.`,
+            `Haha, that's such a great answer. What else do you like doing around ${match.matchedProfile.city}?`,
+            `I love that you mentioned this. It's so rare to find someone who is so upfront about what they want!`,
+            `Totally agree! Would love to know more about your favorite spots in Chennai.`
+          ];
+          const randomReply = replyResponses[Math.floor(Math.random() * replyResponses.length)];
+          
+          const incomingMsg: Message = {
+            id: `msg_in_${Date.now()}`,
+            matchId,
+            senderId: match.matchedProfile.userId,
+            body: randomReply,
+            sentAt: new Date().toISOString()
+          };
+
+          setMessages(prev => ({
+            ...prev,
+            [matchId]: [...(prev[matchId] || []), incomingMsg]
+          }));
+
+          setMatches(prev => prev.map(m => {
+            if (m.id === matchId) {
+              return {
+                ...m,
+                lastMessage: randomReply,
+                lastMessageTime: 'Just now',
+                unreadCount: (m.unreadCount || 0) + 1
+              };
+            }
+            return m;
+          }));
+        }
+      }, 2200);
+
+      return true;
+    }
   };
 
   const blockUser = (userId: string) => {
@@ -811,6 +954,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         matches,
         messages,
         sendMessage,
+        isLoadingMatches,
+        matchesError,
+        refreshMatches,
+        fetchMessagesForMatch,
+        markMatchAsRead,
         blockedUsers,
         blockUser,
         reports,
