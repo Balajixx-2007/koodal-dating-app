@@ -981,9 +981,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const runBatchAdmission = async (city: string, womenToAdmit: number, menToAdmit: number) => {
-    const activeWomen = 40;
-    const activeMen = 50;
-    const ratioBefore = Number((activeMen / Math.max(1, activeWomen)).toFixed(2));
+    let activeWomen = waitlistEntries.filter(w => w.city.toLowerCase().includes(city.toLowerCase()) && w.lane === 'women_and_others' && w.status === 'admitted').length;
+    let activeMen = waitlistEntries.filter(w => w.city.toLowerCase().includes(city.toLowerCase()) && w.lane === 'men' && w.status === 'admitted').length;
 
     let actualWomen = womenToAdmit;
     let actualMen = menToAdmit;
@@ -993,6 +992,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (res.success) {
         actualWomen = res.admittedWomen ?? womenToAdmit;
         actualMen = res.admittedMen ?? menToAdmit;
+        if (res.activeWomen !== undefined) activeWomen = res.activeWomen;
+        if (res.activeMen !== undefined) activeMen = res.activeMen;
       }
     }
 
@@ -1019,6 +1020,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return w;
     }));
 
+    const ratioBefore = Number((activeMen / Math.max(1, activeWomen)).toFixed(2));
     const newActiveWomen = activeWomen + actualWomen;
     const newActiveMen = activeMen + actualMen;
     const ratioAfter = Number((newActiveMen / Math.max(1, newActiveWomen)).toFixed(2));

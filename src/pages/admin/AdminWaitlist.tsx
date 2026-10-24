@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { AdminLayout } from './AdminLayout';
 import { 
@@ -7,6 +7,7 @@ import {
   Clock, RefreshCw, ChevronRight, UserCheck 
 } from 'lucide-react';
 import { IntentBadge } from '../../components/IntentBadge';
+import { WaitlistService } from '../../lib/waitlist-service';
 
 export const AdminWaitlist: React.FC = () => {
   const { 
@@ -23,18 +24,57 @@ export const AdminWaitlist: React.FC = () => {
     newRatio: number;
   } | null>(null);
 
-  // Active counts for the selected city
-  const activeWomenCount = 40;
-  const activeMenCount = 50;
-  const currentRatio = Number((activeMenCount / activeWomenCount).toFixed(2));
-
-  // Compute admissions based on Section 13 formula:
-  // men to admit = max(0, 1.5 * (active_women + women_to_admit) - active_men)
   const womenToAdmit = Math.max(0, womenInput);
-  const projectedActiveWomen = activeWomenCount + womenToAdmit;
-  const computedMenToAdmit = Math.max(0, Math.round(1.5 * projectedActiveWomen - activeMenCount));
-  const projectedActiveMen = activeMenCount + computedMenToAdmit;
-  const projectedRatio = Number((projectedActiveMen / Math.max(1, projectedActiveWomen)).toFixed(2));
+
+  // Dynamic database metrics state
+  const [metrics, setMetrics] = useState({
+    activeWomen: 0,
+    activeMen: 0,
+    currentRatio: 1.0,
+    computedMenToAdmit: 0,
+    projectedRatio: 1.0,
+    isHealthy: true,
+    isLoading: false
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchDatabaseMetrics() {
+      setMetrics(prev => ({ ...prev, isLoading: true }));
+      const res = await WaitlistService.executeBatchAdmission(selectedCity, womenToAdmit, true);
+      if (isMounted) {
+        if (res.success) {
+          setMetrics({
+            activeWomen: res.activeWomen ?? 0,
+            activeMen: res.activeMen ?? 0,
+            currentRatio: res.ratioBefore ?? 1.0,
+            computedMenToAdmit: res.admittedMen ?? 0,
+            projectedRatio: res.ratioAfter ?? 1.0,
+            isHealthy: res.isHealthy ?? true,
+            isLoading: false
+          });
+        } else {
+          // Fallback based on real queues
+          const fallbackWomen = waitlistEntries.filter(w => w.lane === 'women_and_others' && w.city.toLowerCase().includes(selectedCity.toLowerCase()) && w.status === 'admitted').length;
+          const fallbackMen = waitlistEntries.filter(w => w.lane === 'men' && w.city.toLowerCase().includes(selectedCity.toLowerCase()) && w.status === 'admitted').length;
+          const ratio = fallbackWomen > 0 ? Number((fallbackMen / fallbackWomen).toFixed(2)) : 1.0;
+          const menAdmit = Math.max(0, Math.floor(1.5 * (fallbackWomen + womenToAdmit) - fallbackMen));
+          const projRatio = (fallbackWomen + womenToAdmit) > 0 ? Number(((fallbackMen + menAdmit) / (fallbackWomen + womenToAdmit)).toFixed(2)) : 1.0;
+          setMetrics({
+            activeWomen: fallbackWomen,
+            activeMen: fallbackMen,
+            currentRatio: ratio,
+            computedMenToAdmit: menAdmit,
+            projectedRatio: projRatio,
+            isHealthy: projRatio >= 1.0 && projRatio <= 1.5,
+            isLoading: false
+          });
+        }
+      }
+    }
+    fetchDatabaseMetrics();
+    return () => { isMounted = false; };
+  }, [selectedCity, womenToAdmit, waitlistEntries]);
 
   // Filter queues
   const womenAndOthersQueue = waitlistEntries
@@ -50,7 +90,7 @@ export const AdminWaitlist: React.FC = () => {
   const handleExecuteBatch = async () => {
     setIsExecuting(true);
     try {
-      const result = await runBatchAdmission(selectedCity, womenToAdmit, computedMenToAdmit);
+      const result = await runBatchAdmission(selectedCity, womenToAdmit, metrics.computedMenToAdmit);
       setLastBatchResult(result);
     } finally {
       setIsExecuting(false);
@@ -95,22 +135,26 @@ export const AdminWaitlist: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-[#F0E3E6] dark:border-slate-800 space-y-1">
               <span className="text-xs font-semibold text-[#667085]">Active Women</span>
-              <p className="font-heading text-3xl font-extrabold text-[#F20D4E]">{activeWomenCount}</p>
-              <span className="text-[11px] text-[#667085]">Verified in last 14 days</span>
+              <p className="font-heading text-3xl font-extrabold text-[#F20D4E]">{metrics.activeWomen}</p>
+              <span className="text-[11px] text-[#667085]">Verified in last 14 days (Database)</span>
             </div>
 
             <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-[#F0E3E6] dark:border-slate-800 space-y-1">
               <span className="text-xs font-semibold text-[#667085]">Active Men</span>
-              <p className="font-heading text-3xl font-extrabold text-[#15182B] dark:text-white">{activeMenCount}</p>
-              <span className="text-[11px] text-[#667085]">Verified in last 14 days</span>
+              <p className="font-heading text-3xl font-extrabold text-[#15182B] dark:text-white">{metrics.activeMen}</p>
+              <span className="text-[11px] text-[#667085]">Verified in last 14 days (Database)</span>
             </div>
 
             <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-[#F0E3E6] dark:border-slate-800 space-y-1">
               <span className="text-xs font-semibold text-[#667085]">Current Ratio</span>
               <div className="flex items-baseline gap-2">
-                <p className="font-heading text-3xl font-extrabold text-[#079669]">{currentRatio}:1</p>
-                <span className="text-[11px] font-bold text-[#079669] px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60">
-                  Healthy (1.0 - 1.5)
+                <p className="font-heading text-3xl font-extrabold text-[#079669]">{metrics.currentRatio}:1</p>
+                <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                  metrics.isHealthy
+                    ? 'bg-emerald-100 text-[#065F46] dark:bg-emerald-950/60'
+                    : 'bg-amber-100 text-amber-800'
+                }`}>
+                  {metrics.isHealthy ? 'Healthy (1.0 - 1.5)' : 'Needs Balance'}
                 </span>
               </div>
               <span className="text-[11px] text-[#667085]">Target: 1.0 to 1.5 men per woman</span>
@@ -127,7 +171,7 @@ export const AdminWaitlist: React.FC = () => {
                 <span>Weekly Batch Admission Simulator</span>
               </h3>
               <p className="text-xs text-[#667085]">
-                Formula: <code className="font-mono text-[#F20D4E]">men to admit = max(0, 1.5 × active women after batch - active men now)</code>
+                Formula: <code className="font-mono text-[#F20D4E]">men to admit = max(0, floor(1.5 × active women after batch - active men now))</code>
               </p>
             </div>
 
@@ -157,19 +201,19 @@ export const AdminWaitlist: React.FC = () => {
                 Computed Men to Admit
               </label>
               <div className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center justify-between">
-                <span>{computedMenToAdmit} men</span>
-                <span className="text-[11px] text-[#079669] font-normal">Auto-balanced</span>
+                <span>{metrics.computedMenToAdmit} men</span>
+                <span className="text-[11px] text-[#079669] font-normal">Auto-balanced (DB)</span>
               </div>
               <span className="text-[11px] text-[#667085]">Available in queue: {menQueue.length}</span>
             </div>
 
             <button
               onClick={handleExecuteBatch}
-              disabled={womenAndOthersQueue.length === 0 && menQueue.length === 0}
+              disabled={isExecuting || (womenAndOthersQueue.length === 0 && menQueue.length === 0)}
               className="w-full py-2.5 btn-primary-rose text-xs font-bold flex items-center justify-center gap-2 shadow-md disabled:opacity-50"
             >
               <UserCheck className="w-4 h-4" />
-              <span>Execute Batch Admission</span>
+              <span>{isExecuting ? 'Executing Batch...' : 'Execute Batch Admission'}</span>
             </button>
           </div>
 
@@ -178,11 +222,11 @@ export const AdminWaitlist: React.FC = () => {
             <div className="flex items-center gap-2 text-[#D80B42] dark:text-rose-300 font-medium">
               <CheckCircle2 className="w-4 h-4 text-[#079669] shrink-0" />
               <span>
-                Preview: Admitting top {womenToAdmit} women & others and top {computedMenToAdmit} men will yield an active pool of {projectedActiveWomen} women & {projectedActiveMen} men.
+                Preview: Admitting top {womenToAdmit} women & others and top {metrics.computedMenToAdmit} men will balance active pool to ratio {metrics.projectedRatio}:1.
               </span>
             </div>
             <div className="shrink-0 font-bold text-[#15182B] dark:text-white">
-              Projected Ratio: <span className="text-[#079669]">{projectedRatio}:1</span>
+              Projected Ratio: <span className="text-[#079669]">{metrics.projectedRatio}:1</span>
             </div>
           </div>
 

@@ -441,6 +441,7 @@ export interface Database {
           id: string;
           admin_id: string;
           action: string;
+          target_type: string;
           target_id: string | null;
           details: Json;
           created_at: string;
@@ -449,6 +450,7 @@ export interface Database {
           id?: string;
           admin_id: string;
           action: string;
+          target_type: string;
           target_id?: string | null;
           details?: Json;
           created_at?: string;
@@ -457,6 +459,7 @@ export interface Database {
           id?: string;
           admin_id?: string;
           action?: string;
+          target_type?: string;
           target_id?: string | null;
           details?: Json;
           created_at?: string;

@@ -161,6 +161,7 @@ export class ModerationService {
           .insert({
             admin_id: adminId,
             action: 'review_report',
+            target_type: 'report',
             target_id: reportId,
             details: { action, targetUserId }
           });
@@ -253,6 +254,7 @@ export class ModerationService {
           .insert({
             admin_id: adminId,
             action: 'review_selfie',
+            target_type: 'selfie',
             target_id: verificationId,
             details: { approved, purged_selfie_path: verif?.selfie_path || null }
           });
@@ -318,6 +320,7 @@ export class ModerationService {
           .insert({
             admin_id: adminId,
             action: 'review_photo',
+            target_type: 'photo',
             target_id: photoId,
             details: { approved }
           });
@@ -378,6 +381,7 @@ export class ModerationService {
           .insert({
             admin_id: adminId,
             action: 'toggle_user_status',
+            target_type: 'user',
             target_id: userId,
             details: { newStatus }
           });
