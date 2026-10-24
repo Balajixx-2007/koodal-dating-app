@@ -187,11 +187,11 @@ ok 33 - 33. Anon cannot execute get_member_profile
 
 === 3. Supabase CLI test db (Full Suite: Phase 2 + Phase 3 + Step 1.5) ===
 Connecting to local database...
-Error response from daemon: Get "https://public.ecr.aws/v2/": context deadline exceeded
+Error response from daemon: toomanyrequests: Data limit exceeded
 Retrying after 4s: public.ecr.aws/supabase/pg_prove:3.36
-Error response from daemon: Get "https://public.ecr.aws/v2/": net/http: request canceled while waiting for connection (Client.Timeout exceeded while awaiting headers)
+Error response from daemon: toomanyrequests: Data limit exceeded
 Retrying after 8s: public.ecr.aws/supabase/pg_prove:3.36
-Error response from daemon: Get "https://public.ecr.aws/v2/": net/http: request canceled while waiting for connection (Client.Timeout exceeded while awaiting headers)
+Error response from daemon: toomanyrequests: Data limit exceeded
 3.36: Pulling from supabase/pg_prove
 dcccee43ad5d: Pulling fs layer
 06d62d0de6d7: Pulling fs layer
@@ -202,11 +202,11 @@ a22cb17b3b93: Verifying Checksum
 a22cb17b3b93: Download complete
 dcccee43ad5d: Verifying Checksum
 dcccee43ad5d: Download complete
+4f4fb700ef54: Verifying Checksum
+4f4fb700ef54: Download complete
 06d62d0de6d7: Verifying Checksum
 06d62d0de6d7: Download complete
 dcccee43ad5d: Pull complete
-4f4fb700ef54: Verifying Checksum
-4f4fb700ef54: Download complete
 06d62d0de6d7: Pull complete
 a22cb17b3b93: Pull complete
 4f4fb700ef54: Pull complete
