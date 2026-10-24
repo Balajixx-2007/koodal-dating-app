@@ -2,8 +2,9 @@ import React from 'react';
 import { useApp } from '../context/AppContext';
 import { 
   Heart, Sparkles, MessageCircle, UserRound, ShieldCheck, 
-  Settings, Globe, ShieldAlert, BadgeCheck 
+  Settings, Globe, ShieldAlert, BadgeCheck, Clock 
 } from 'lucide-react';
+import { canAccessMemberRoutes } from '../lib/waitlist-gate';
 
 export const Navbar: React.FC = () => {
   const { 
@@ -15,9 +16,12 @@ export const Navbar: React.FC = () => {
     matches, 
     reports, 
     selfieVerifications,
-    activeRole
+    activeRole,
+    currentUser,
+    userWaitlistStatus
   } = useApp();
 
+  const hasMemberAccess = canAccessMemberRoutes(currentUser, userWaitlistStatus);
   const totalUnread = matches.reduce((acc, m) => acc + (m.unreadCount || 0), 0);
   const pendingAdminItems = reports.filter(r => r.status === 'pending').length + 
     selfieVerifications.filter(s => s.status === 'pending').length;
@@ -48,7 +52,7 @@ export const Navbar: React.FC = () => {
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           {/* Brand Logo with Romantic Heart */}
           <div 
-            onClick={() => navigateTo(activeRole === 'admin' ? '/admin/reports' : '/discover')} 
+            onClick={() => navigateTo(activeRole === 'admin' ? '/admin/reports' : (hasMemberAccess ? '/discover' : '/waitlist/status'))} 
             className="flex items-center gap-3 cursor-pointer select-none group"
           >
             <div className="relative">
@@ -74,71 +78,101 @@ export const Navbar: React.FC = () => {
 
           {/* Desktop Navigation Links */}
           <nav className="hidden md:flex items-center gap-1 bg-[#FFF9F5] dark:bg-slate-900 p-1 rounded-2xl border border-[#F0E3E6] dark:border-slate-800">
-            <button
-              onClick={() => navigateTo('/discover')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
-                currentView === '/discover'
-                  ? 'bg-white dark:bg-slate-800 text-[#F20D4E] shadow-sm border border-[#F0E3E6] dark:border-slate-700'
-                  : 'text-[#667085] hover:text-[#15182B] dark:text-slate-300 dark:hover:text-white hover:bg-white/80 dark:hover:bg-slate-800'
-              }`}
-            >
-              <Sparkles className="w-4 h-4 text-[#F20D4E]" />
-              <span>{t.nav_discover}</span>
-            </button>
+            {hasMemberAccess ? (
+              <>
+                <button
+                  onClick={() => navigateTo('/discover')}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                    currentView === '/discover'
+                      ? 'bg-white dark:bg-slate-800 text-[#F20D4E] shadow-sm border border-[#F0E3E6] dark:border-slate-700'
+                      : 'text-[#667085] hover:text-[#15182B] dark:text-slate-300 dark:hover:text-white hover:bg-white/80 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <Sparkles className="w-4 h-4 text-[#F20D4E]" />
+                  <span>{t.nav_discover}</span>
+                </button>
 
-            <button
-              onClick={() => navigateTo('/matches')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 relative ${
-                currentView === '/matches' || currentView.startsWith('/chat')
-                  ? 'bg-white dark:bg-slate-800 text-[#F20D4E] shadow-sm border border-[#F0E3E6] dark:border-slate-700'
-                  : 'text-[#667085] hover:text-[#15182B] dark:text-slate-300 dark:hover:text-white hover:bg-white/80 dark:hover:bg-slate-800'
-              }`}
-            >
-              <MessageCircle className="w-4 h-4 text-[#F20D4E]" />
-              <span>{t.nav_matches}</span>
-              {totalUnread > 0 && (
-                <span className="w-4.5 h-4.5 rounded-full bg-[#F20D4E] text-white text-[10px] font-bold flex items-center justify-center shadow-sm">
-                  {totalUnread}
-                </span>
-              )}
-            </button>
+                <button
+                  onClick={() => navigateTo('/matches')}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 relative ${
+                    currentView === '/matches' || currentView.startsWith('/chat')
+                      ? 'bg-white dark:bg-slate-800 text-[#F20D4E] shadow-sm border border-[#F0E3E6] dark:border-slate-700'
+                      : 'text-[#667085] hover:text-[#15182B] dark:text-slate-300 dark:hover:text-white hover:bg-white/80 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <MessageCircle className="w-4 h-4 text-[#F20D4E]" />
+                  <span>{t.nav_matches}</span>
+                  {totalUnread > 0 && (
+                    <span className="w-4.5 h-4.5 rounded-full bg-[#F20D4E] text-white text-[10px] font-bold flex items-center justify-center shadow-sm">
+                      {totalUnread}
+                    </span>
+                  )}
+                </button>
 
-            <button
-              onClick={() => navigateTo('/safety')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
-                currentView === '/safety'
-                  ? 'bg-white dark:bg-slate-800 text-[#F20D4E] shadow-sm border border-[#F0E3E6] dark:border-slate-700'
-                  : 'text-[#667085] hover:text-[#15182B] dark:text-slate-300 dark:hover:text-white hover:bg-white/80 dark:hover:bg-slate-800'
-              }`}
-            >
-              <ShieldCheck className="w-4 h-4 text-[#079669]" />
-              <span>{t.nav_safety}</span>
-            </button>
+                <button
+                  onClick={() => navigateTo('/safety')}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                    currentView === '/safety'
+                      ? 'bg-white dark:bg-slate-800 text-[#F20D4E] shadow-sm border border-[#F0E3E6] dark:border-slate-700'
+                      : 'text-[#667085] hover:text-[#15182B] dark:text-slate-300 dark:hover:text-white hover:bg-white/80 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <ShieldCheck className="w-4 h-4 text-[#079669]" />
+                  <span>{t.nav_safety}</span>
+                </button>
 
-            <button
-              onClick={() => navigateTo('/me')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
-                currentView === '/me'
-                  ? 'bg-white dark:bg-slate-800 text-[#F20D4E] shadow-sm border border-[#F0E3E6] dark:border-slate-700'
-                  : 'text-[#667085] hover:text-[#15182B] dark:text-slate-300 dark:hover:text-white hover:bg-white/80 dark:hover:bg-slate-800'
-              }`}
-            >
-              <UserRound className="w-4 h-4 text-[#667085]" />
-              <span>{t.nav_profile}</span>
-            </button>
+                <button
+                  onClick={() => navigateTo('/me')}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                    currentView === '/me'
+                      ? 'bg-white dark:bg-slate-800 text-[#F20D4E] shadow-sm border border-[#F0E3E6] dark:border-slate-700'
+                      : 'text-[#667085] hover:text-[#15182B] dark:text-slate-300 dark:hover:text-white hover:bg-white/80 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <UserRound className="w-4 h-4 text-[#667085]" />
+                  <span>{t.nav_profile}</span>
+                </button>
 
-            <button
-              onClick={() => navigateTo('/settings')}
-              className={`p-2 rounded-xl transition-all ${
-                currentView === '/settings' 
-                  ? 'bg-white dark:bg-slate-800 text-[#F20D4E] shadow-sm' 
-                  : 'text-[#98A2B3] hover:text-[#15182B] dark:hover:text-slate-200'
-              }`}
-              title="Settings & Privacy"
-              aria-label="Settings & Privacy"
-            >
-              <Settings className="w-4 h-4" />
-            </button>
+                <button
+                  onClick={() => navigateTo('/settings')}
+                  className={`p-2 rounded-xl transition-all ${
+                    currentView === '/settings' 
+                      ? 'bg-white dark:bg-slate-800 text-[#F20D4E] shadow-sm' 
+                      : 'text-[#98A2B3] hover:text-[#15182B] dark:hover:text-slate-200'
+                  }`}
+                  title="Settings & Privacy"
+                  aria-label="Settings & Privacy"
+                >
+                  <Settings className="w-4 h-4" />
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={() => navigateTo('/waitlist/status')}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                    currentView === '/waitlist/status'
+                      ? 'bg-white dark:bg-slate-800 text-[#F20D4E] shadow-sm border border-[#F0E3E6] dark:border-slate-700'
+                      : 'text-[#667085] hover:text-[#15182B] dark:text-slate-300 dark:hover:text-white hover:bg-white/80 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <Clock className="w-4 h-4 text-[#F20D4E]" />
+                  <span>Waitlist Status</span>
+                </button>
+
+                <button
+                  onClick={() => navigateTo('/safety')}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                    currentView === '/safety'
+                      ? 'bg-white dark:bg-slate-800 text-[#F20D4E] shadow-sm border border-[#F0E3E6] dark:border-slate-700'
+                      : 'text-[#667085] hover:text-[#15182B] dark:text-slate-300 dark:hover:text-white hover:bg-white/80 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <ShieldCheck className="w-4 h-4 text-[#079669]" />
+                  <span>{t.nav_safety}</span>
+                </button>
+              </>
+            )}
           </nav>
 
           {/* Right Action: Language Switcher & Admin Shortcut */}

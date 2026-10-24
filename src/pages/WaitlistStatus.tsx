@@ -1,17 +1,61 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { 
   Sparkles, ShieldCheck, CheckCircle2, Circle, ArrowRight, 
   Copy, Check, Share2, HelpCircle, Users, Award, Camera, 
-  FileText, Clock, ExternalLink 
+  FileText, Clock, ExternalLink, AlertTriangle, PartyPopper 
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { WaitlistService } from '../lib/waitlist-service';
+import { getClaimWindowDetails } from '../lib/waitlist-gate';
 
 export const WaitlistStatus: React.FC = () => {
   const { userWaitlistStatus, boostWaitlistEntry, navigateTo, waitlistEntries } = useApp();
   const [copied, setCopied] = useState(false);
   const [showRules, setShowRules] = useState(false);
   const [selfiePromptModal, setSelfiePromptModal] = useState(false);
+
+  const [livePosition, setLivePosition] = useState<{
+    rank: number;
+    total: number;
+    estimatedDays: number;
+    score: number;
+    status: string;
+    loading: boolean;
+  }>({
+    rank: 0,
+    total: 0,
+    estimatedDays: 0,
+    score: userWaitlistStatus?.score || 0,
+    status: userWaitlistStatus?.status || 'waiting',
+    loading: !!userWaitlistStatus?.email,
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadPosition() {
+      if (!userWaitlistStatus?.email) return;
+      try {
+        const res = await WaitlistService.fetchWaitlistPosition(userWaitlistStatus.email);
+        if (isMounted && res.success && res.found) {
+          setLivePosition({
+            rank: res.rank ?? 0,
+            total: res.lane_total ?? 0,
+            estimatedDays: res.estimated_days ?? 0,
+            score: res.score ?? userWaitlistStatus.score,
+            status: res.status ?? userWaitlistStatus.status,
+            loading: false,
+          });
+        } else if (isMounted) {
+          setLivePosition(prev => ({ ...prev, loading: false }));
+        }
+      } catch {
+        if (isMounted) setLivePosition(prev => ({ ...prev, loading: false }));
+      }
+    }
+    loadPosition();
+    return () => { isMounted = false; };
+  }, [userWaitlistStatus?.email, userWaitlistStatus?.score, userWaitlistStatus?.status]);
 
   // If no waitlist entry exists, redirect to /waitlist
   if (!userWaitlistStatus) {
@@ -29,19 +73,30 @@ export const WaitlistStatus: React.FC = () => {
     );
   }
 
-  // Calculate position in lane
+  // Calculate position in lane from context fallback if DB position is not yet loaded
   const laneEntries = waitlistEntries
     .filter(w => w.lane === userWaitlistStatus.lane && w.status === 'waiting')
     .sort((a, b) => b.score - a.score);
 
-  const currentRank = laneEntries.findIndex(w => w.id === userWaitlistStatus.id) + 1 || 142;
-  const estimatedDays = Math.max(3, Math.ceil(currentRank / 15) * 4);
+  const localRank = laneEntries.findIndex(w => w.id === userWaitlistStatus.id) + 1;
+  const currentRank = livePosition.rank > 0 
+    ? livePosition.rank 
+    : (localRank > 0 ? localRank : 1);
+  const estimatedDays = livePosition.estimatedDays > 0 
+    ? livePosition.estimatedDays 
+    : Math.max(3, Math.ceil(currentRank / 15) * 7);
+  const currentScore = livePosition.score > 0 ? livePosition.score : userWaitlistStatus.score;
+  const currentStatus = livePosition.status || userWaitlistStatus.status;
+
+  // 7-day claim window inspection
+  const claimDetails = getClaimWindowDetails(
+    userWaitlistStatus.admittedAt || (currentStatus === 'admitted' ? userWaitlistStatus.createdAt : undefined)
+  );
 
   const handleCopyLink = () => {
     const url = `${window.location.origin}/waitlist?ref=${userWaitlistStatus.id.slice(0, 8)}`;
     navigator.clipboard?.writeText(url);
     setCopied(true);
-    boostWaitlistEntry(userWaitlistStatus.id, 'referral');
     confetti({ particleCount: 40, spread: 50, origin: { y: 0.7 } });
     setTimeout(() => setCopied(false), 2500);
   };
@@ -67,14 +122,72 @@ export const WaitlistStatus: React.FC = () => {
         </div>
 
         <h1 className="font-heading text-3xl sm:text-4xl font-extrabold text-[#15182B] dark:text-white tracking-tight">
-          You are number #{currentRank}
+          {claimDetails.isAdmitted 
+            ? (claimDetails.isExpired ? "Admission Window Expired" : "You Are Admitted!") 
+            : `You are number #${currentRank}`}
         </h1>
 
         <p className="text-sm text-[#667085] dark:text-slate-300 max-w-md mx-auto leading-relaxed">
-          In {userWaitlistStatus.city} &bull; {userWaitlistStatus.lane === 'men' ? 'Men\'s Lane' : 'Women & Others Lane'}.
-          Estimated admission: <strong>~{estimatedDays} days</strong>.
+          {claimDetails.isAdmitted && !claimDetails.isExpired ? (
+            <span>Welcome to Koodal! Claim your spot within your <strong>7-day admission window</strong>.</span>
+          ) : claimDetails.isExpired ? (
+            <span>Your 7-day claim period has elapsed. Please rejoin the queue to be considered in next week's batch.</span>
+          ) : (
+            <span>
+              In {userWaitlistStatus.city} &bull; {userWaitlistStatus.lane === 'men' ? 'Men\'s Lane' : 'Women & Others Lane'}.
+              Estimated admission: <strong>~{estimatedDays} days</strong>.
+            </span>
+          )}
         </p>
       </div>
+
+      {/* Admitted Active 7-Day Claim Window Banner */}
+      {claimDetails.isAdmitted && !claimDetails.isExpired && (
+        <div className="p-6 rounded-3xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-xl space-y-4">
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider">
+            <PartyPopper className="w-5 h-5 text-emerald-200" />
+            <span>Admission Spot Available</span>
+          </div>
+          <h2 className="font-heading text-xl sm:text-2xl font-bold leading-snug">
+            7-Day Claim Window Active
+          </h2>
+          <p className="text-xs sm:text-sm text-emerald-100 leading-relaxed">
+            Unclaimed spots automatically expire after 7 days to maintain balanced active ratios in {userWaitlistStatus.city}.
+          </p>
+          <div className="bg-black/20 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-xs">
+              <Clock className="w-4 h-4 text-emerald-200 shrink-0" />
+              <span>Time Left: <strong>{claimDetails.remainingDays}d {claimDetails.remainingHours}h</strong> (Deadline: {claimDetails.claimDeadline ? new Date(claimDetails.claimDeadline).toLocaleDateString() : '7 days'})</span>
+            </div>
+            <button
+              onClick={() => navigateTo('/onboarding')}
+              className="px-5 py-2.5 rounded-xl bg-white text-emerald-950 hover:bg-emerald-50 font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2"
+            >
+              <span>Claim & Complete Profile</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Claim Window Expired Warning */}
+      {claimDetails.isExpired && (
+        <div className="p-6 rounded-3xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/50 text-amber-900 dark:text-amber-200 space-y-3">
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider">
+            <AlertTriangle className="w-4 h-4 text-amber-600" />
+            <span>7-Day Claim Window Lapsed</span>
+          </div>
+          <p className="text-xs leading-relaxed">
+            Your admission spot in {userWaitlistStatus.city} has automatically expired per Section 13 rules to avoid dormant accounts. You can rejoin the waitlist anytime to enter the upcoming weekly admission batch.
+          </p>
+          <button
+            onClick={() => navigateTo('/waitlist')}
+            className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs shadow-sm transition-colors"
+          >
+            Rejoin Waitlist
+          </button>
+        </div>
+      )}
 
       {/* Main Status & Priority Score Card */}
       <div className="surface-card p-6 sm:p-8 space-y-6 relative overflow-hidden">
@@ -83,16 +196,22 @@ export const WaitlistStatus: React.FC = () => {
             <p className="text-xs text-[#667085] uppercase tracking-wider font-semibold">Priority Score</p>
             <div className="flex items-baseline gap-2">
               <span className="font-heading text-4xl font-black text-[#F20D4E]">
-                {userWaitlistStatus.score}
+                {currentScore}
               </span>
               <span className="text-xs text-[#667085]">points</span>
             </div>
           </div>
 
           <div className="text-right">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-[#079669] text-xs font-bold border border-emerald-200 dark:border-emerald-800/40">
+            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${
+              claimDetails.isExpired 
+                ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 border-amber-200 dark:border-amber-800/40' 
+                : claimDetails.isAdmitted 
+                  ? 'bg-emerald-50 dark:bg-emerald-950/40 text-[#079669] border-emerald-200 dark:border-emerald-800/40'
+                  : 'bg-rose-50 dark:bg-rose-950/40 text-[#D80B42] border-rose-200 dark:border-rose-800/40'
+            }`}>
               <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>{userWaitlistStatus.status === 'admitted' ? 'Admitted!' : 'Active in Queue'}</span>
+              <span>{claimDetails.isExpired ? 'Expired' : claimDetails.isAdmitted ? 'Admitted!' : 'Active in Queue'}</span>
             </span>
             <p className="text-[11px] text-[#667085] mt-1">{userWaitlistStatus.email}</p>
           </div>
@@ -207,7 +326,7 @@ export const WaitlistStatus: React.FC = () => {
                     Invite Friends (+10 pts per friend)
                   </p>
                   <p className="text-[11px] text-[#667085]">
-                    {userWaitlistStatus.referralCount} verified friends joined
+                    {userWaitlistStatus.referralCount} verified friends joined &bull; points apply after friend's selfie is approved
                   </p>
                 </div>
               </div>
@@ -222,15 +341,22 @@ export const WaitlistStatus: React.FC = () => {
           </div>
         </div>
 
-        {/* Explore demo action */}
+        {/* Explore / Info actions */}
         <div className="pt-2 flex flex-col sm:flex-row items-center gap-3">
-          <button
-            onClick={() => navigateTo('/discover')}
-            className="w-full sm:flex-1 py-3 btn-secondary-surface text-xs font-bold flex items-center justify-center gap-2"
-          >
-            <span>Preview Discover Feed (Demo)</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
+          {claimDetails.isAdmitted && !claimDetails.isExpired ? (
+            <button
+              onClick={() => navigateTo('/onboarding')}
+              className="w-full sm:flex-1 py-3 btn-primary-rose text-xs font-bold flex items-center justify-center gap-2 shadow-md"
+            >
+              <span>Proceed to Onboarding</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          ) : (
+            <div className="w-full sm:flex-1 py-3 px-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800 text-[11px] text-[#667085] dark:text-slate-400 flex items-center gap-2">
+              <Clock className="w-3.5 h-3.5 text-[#F20D4E] shrink-0" />
+              <span>Admissions run weekly. We will email your admission invite when your batch is called.</span>
+            </div>
+          )}
           <button
             onClick={() => setShowRules(!showRules)}
             className="w-full sm:w-auto px-4 py-3 text-xs text-[#667085] hover:text-[#15182B] dark:hover:text-white font-medium flex items-center justify-center gap-1.5 transition-colors"

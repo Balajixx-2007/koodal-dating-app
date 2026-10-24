@@ -64,15 +64,24 @@ export class WaitlistService {
 
   /**
    * Fetches waitlist rank and total in city via the SECURITY DEFINER RPC.
+   * Supports both p_email (real database schema) and p_city/p_user_id parameters.
    */
   static async fetchWaitlistPosition(
-    city: string,
-    userId: string,
+    cityOrEmail: string,
+    userId?: string,
     client: SupabaseClient<Database> = supabase
   ): Promise<{
     success: boolean;
+    found?: boolean;
+    rank?: number;
     position?: number;
     total?: number;
+    lane_total?: number;
+    estimatedDays?: number;
+    estimated_days?: number;
+    score?: number;
+    lane?: string;
+    status?: string;
     offline?: boolean;
     error?: string;
   }> {
@@ -81,20 +90,45 @@ export class WaitlistService {
     }
 
     try {
-      const { data, error } = await client.rpc('get_waitlist_position', {
-        p_city: city,
-        p_user_id: userId
-      });
+      const isEmail = cityOrEmail.includes('@') || (userId && userId.includes('@'));
+      const email = cityOrEmail.includes('@') ? cityOrEmail : (userId || '');
+
+      const rpcArgs: any = isEmail
+        ? { p_email: email }
+        : { p_city: cityOrEmail, p_user_id: userId };
+
+      const { data, error } = await client.rpc('get_waitlist_position', rpcArgs);
 
       if (error) {
         return { success: false, error: error.message };
       }
 
-      const row = data?.[0];
+      if (!data) {
+        return { success: false, error: 'Waitlist position data unavailable' };
+      }
+
+      const row: any = Array.isArray(data) ? data[0] : data;
+
+      if (row.found === false) {
+        return { success: false, found: false, error: 'Waitlist entry not found for this email' };
+      }
+
+      const rank = row?.rank ?? row?.position ?? 0;
+      const total = row?.lane_total ?? row?.total ?? 0;
+      const estimatedDays = row?.estimated_days ?? Math.max(3, Math.ceil(rank / 15.0) * 7);
+
       return {
         success: true,
-        position: row?.position ?? 0,
-        total: row?.total ?? 0
+        found: true,
+        rank,
+        position: rank,
+        total,
+        lane_total: total,
+        estimatedDays,
+        estimated_days: estimatedDays,
+        score: row?.score,
+        lane: row?.lane,
+        status: row?.status
       };
     } catch (err: any) {
       return { success: false, error: err.message };
