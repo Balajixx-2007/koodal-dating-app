@@ -17,6 +17,8 @@ jobs:
   test-database:
     name: Run pgTAP & Admission Formula Suite
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout repository
@@ -76,9 +78,10 @@ jobs:
           cp pg_tap_output.txt /tmp/pg_tap_output.txt || true
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git checkout -f -B ci-logs
+          git fetch origin ci-logs || true
+          git checkout -f ci-logs || git checkout -b ci-logs
           mkdir -p ci-artifacts
           cp /tmp/pg_tap_output.txt ci-artifacts/pg_tap_output.txt || true
           git add -A ci-artifacts/
           git commit -m "ci: publish latest pgTAP test results [skip ci]" || true
-          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git HEAD:refs/heads/ci-logs --force
+          git push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:refs/heads/ci-logs --force
