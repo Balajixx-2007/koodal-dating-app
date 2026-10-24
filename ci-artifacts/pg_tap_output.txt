@@ -1,23 +1,11 @@
 === 1. RED STATE TAP OUTPUT (Step 1.5 tests before migration 11) ===
 1..33
-ERROR:  column "role" of relation "admins" does not exist
-LINE 1: INSERT INTO public.admins (user_id, role)
-                                            ^
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
+not ok 1 - 1. can_view_member(uuid, uuid) exists
+# Failed test 1: "1. can_view_member(uuid, uuid) exists"
+ERROR:  function public.can_view_member(unknown, unknown) does not exist
+LINE 2:     public.can_view_member('11111111-2222-3333-4444-00000000...
+            ^
+HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
@@ -163,207 +151,73 @@ ERROR:  current transaction is aborted, commands ignored until end of transactio
 
 === 2. GREEN STATE TAP OUTPUT (Step 1.5 tests after migration 11) ===
 1..33
-ERROR:  column "role" of relation "admins" does not exist
-LINE 1: INSERT INTO public.admins (user_id, role)
-                                            ^
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  savepoint "sp_read" does not exist
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  savepoint "sp_read" does not exist
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  savepoint "sp_read" does not exist
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  savepoint "sp_read" does not exist
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  savepoint "sp_read" does not exist
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  savepoint "sp_read" does not exist
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  savepoint "sp_read" does not exist
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  savepoint "sp_read" does not exist
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  savepoint "sp_read" does not exist
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  savepoint "sp_read" does not exist
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  savepoint "sp_read" does not exist
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  savepoint "sp_read" does not exist
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  savepoint "sp_read" does not exist
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  savepoint "sp_read" does not exist
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  savepoint "sp_read" does not exist
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  savepoint "sp_read" does not exist
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  savepoint "sp_read" does not exist
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  savepoint "sp_read" does not exist
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ok 1 - 1. can_view_member(uuid, uuid) exists
+ok 2 - 2. Eligible active admitted member with approved photo and selfie is viewable
+ok 3 - 3. Paused member is not viewable
+ok 4 - 4. Banned user is not viewable
+ok 5 - 5. Suspended user is not viewable
+ok 6 - 6. Unadmitted waitlist member is not viewable
+ok 7 - 7. Member without approved selfie is not viewable
+ok 8 - 8. Member without approved photo is not viewable
+ok 9 - 9. Member blocked by viewer is not viewable
+ok 10 - 10. Member blocking viewer is not viewable
+ok 11 - 11. Liked member can still be viewed by id
+ok 12 - 12. Passed member can still be viewed by id
+ok 13 - 13. get_member_profile(uuid) exists
+ok 14 - 14. Viewer can open eligible member profile by id
+ok 15 - 15. Viewer can open liked member profile by id
+ok 16 - 16. Viewer can open passed member profile by id
+ok 17 - 17. Blocked target cannot be opened by caller
+ok 18 - 18. Target blocking caller cannot be opened by caller
+ok 19 - 19. Match plus block hides profile in both directions
+ok 20 - 20. get_member_profile() returns exact allowed columns (no email, birth_date, admin fields)
+ok 21 - 21. get_matches_list() exists
+ok 22 - 22. get_matches_list returns active match for authenticated user
+ok 23 - 23. get_matches_list returns latest message ordered by sent_at
+ok 24 - 24. get_matches_list returns accurate unread count
+ok 25 - 25. get_matches_list returns one approved photo path
+ok 26 - 26. get_matches_list excludes partner blocked by caller
+ok 27 - 27. get_matches_list excludes partner blocking caller
+ok 28 - 28. get_matches_list excludes banned partner
+ok 29 - 29. get_matches_list excludes suspended partner
+ok 30 - 30. Messages table RLS hides chat history after block
+ok 31 - 31. Anon cannot execute can_view_member
+ok 32 - 32. Anon cannot execute get_matches_list
+ok 33 - 33. Anon cannot execute get_member_profile
 
 === 3. Supabase CLI test db (Full Suite: Phase 2 + Phase 3 + Step 1.5) ===
 Connecting to local database...
+Error response from daemon: toomanyrequests: Data limit exceeded
+Retrying after 4s: public.ecr.aws/supabase/pg_prove:3.36
+Error response from daemon: toomanyrequests: Data limit exceeded
+Retrying after 8s: public.ecr.aws/supabase/pg_prove:3.36
+Error response from daemon: Get "https://public.ecr.aws/v2/": context deadline exceeded
 3.36: Pulling from supabase/pg_prove
 dcccee43ad5d: Pulling fs layer
 06d62d0de6d7: Pulling fs layer
 a22cb17b3b93: Pulling fs layer
 4f4fb700ef54: Pulling fs layer
 4f4fb700ef54: Waiting
-a22cb17b3b93: Verifying Checksum
 a22cb17b3b93: Download complete
 dcccee43ad5d: Verifying Checksum
 dcccee43ad5d: Download complete
 06d62d0de6d7: Verifying Checksum
 06d62d0de6d7: Download complete
-4f4fb700ef54: Download complete
 dcccee43ad5d: Pull complete
+4f4fb700ef54: Verifying Checksum
+4f4fb700ef54: Download complete
 06d62d0de6d7: Pull complete
 a22cb17b3b93: Pull complete
 4f4fb700ef54: Pull complete
 Digest: sha256:eda7c5e68719e9c8287e78c017118407b48df904a51c935f5ab6098b8c0bc6bc
-Status: Downloaded newer image for public.ecr.aws/supabase/pg_prove:3.36
-public.ecr.aws/supabase/pg_prove:3.36
+Status: Downloaded newer image for ghcr.io/supabase/pg_prove:3.36
+ghcr.io/supabase/pg_prove:3.36
 psql:/home/runner/work/koodal-dating-app/koodal-dating-app/supabase/tests/database_security_and_admissions.sql:9: NOTICE:  extension "pgtap" already exists, skipping
 /home/runner/work/koodal-dating-app/koodal-dating-app/supabase/tests/database_security_and_admissions.sql .. ok
 psql:/home/runner/work/koodal-dating-app/koodal-dating-app/supabase/tests/phase3_security_and_discovery.sql:8: NOTICE:  extension "pgtap" already exists, skipping
 /home/runner/work/koodal-dating-app/koodal-dating-app/supabase/tests/phase3_security_and_discovery.sql ..... ok
 psql:/home/runner/work/koodal-dating-app/koodal-dating-app/supabase/tests/step1_5_read_functions.sql:2: NOTICE:  extension "pgtap" already exists, skipping
-psql:/home/runner/work/koodal-dating-app/koodal-dating-app/supabase/tests/step1_5_read_functions.sql:15: ERROR:  column "role" of relation "admins" does not exist
-LINE 1: INSERT INTO public.admins (user_id, role)
-                                            ^
-/home/runner/work/koodal-dating-app/koodal-dating-app/supabase/tests/step1_5_read_functions.sql ............ 
-Dubious, test returned 3 (wstat 768, 0x300)
-Failed 33/33 subtests 
-
-Test Summary Report
--------------------
-/home/runner/work/koodal-dating-app/koodal-dating-app/supabase/tests/step1_5_read_functions.sql          (Wstat: 768 (exited 3) Tests: 0 Failed: 0)
-  Non-zero exit status: 3
-  Parse errors: Bad plan.  You planned 33 tests but ran 0.
-Files=3, Tests=79,  0 wallclock secs ( 0.03 usr  0.00 sys +  0.02 cusr  0.01 csys =  0.06 CPU)
-Result: FAIL
-error running container: exit 1
-Try rerunning the command with --debug to troubleshoot the error.
+/home/runner/work/koodal-dating-app/koodal-dating-app/supabase/tests/step1_5_read_functions.sql ............ ok
+All tests successful.
+Files=3, Tests=112,  0 wallclock secs ( 0.02 usr  0.01 sys +  0.01 cusr  0.01 csys =  0.05 CPU)
+Result: PASS
