@@ -1,0 +1,78 @@
+=== TAP Stream: supabase/tests/database_security_and_admissions.sql ===
+1..14
+ok 1 - Audit log allows insert
+ok 2 - Audit log prohibits DELETE operation
+ok 3 - Audit log prohibits UPDATE operation
+ok 4 - Member A cannot tamper with status to self-admit
+ok 5 - Member A cannot change their assigned lane
+ok 6 - Member A score remains strictly <= 100
+ok 7 - Member A receives 0 rows when attempting to query Member B entry (RLS isolation)
+ok 8 - Member inserting another person's email must fail
+ok 9 - Member inserting another person's user_id must fail
+ok 10 - Member with unconfirmed email must fail
+ok 11 - Member with confirmed email and own credentials inserts successfully
+ok 12 - calculate_waitlist_score caps maximum score at 100
+ok 13 - calculate_waitlist_score caps referral bonus at +10
+ok 14 - SQL admission formula uses FLOOR() to prevent rounding up above 1.5 ratio
+=== TAP Stream: supabase/tests/phase3_security_and_discovery.sql ===
+1..25
+ok 1 - 1. Member A cannot direct SELECT Member B row from public.users
+ok 2 - 2. Member A cannot direct SELECT Member B row from public.profiles
+ok 3 - 3. Member A can direct SELECT their own row from public.profiles
+ok 4 - 4. get_discovery_feed() function exists
+ok 5 - 5. profile_photos table exists
+ok 6 - 6. blocks table exists
+ok 7 - 7. passes table exists
+ok 8 - 8. reports table exists
+ok 9 - 9. Members cannot delete likes
+ok 10 - 10. 21st like in rolling 24h throws daily limit exception
+ok 11 - 11. Mutual like creates exactly one match
+ok 12 - 12. Member A cannot view Member B selfie verification
+ok 13 - 13. Member A can view own selfie verification
+ok 14 - 14. Message body exceeding 2000 characters is rejected
+ok 15 - 15. Empty message body is rejected
+ok 16 - 16. Direct UPDATE on messages (read_at tampering) is prohibited
+ok 17 - 17. mark_messages_read(uuid) function exists
+ok 18 - 18. Non-admin cannot SELECT from public.admins
+ok 19 - 19. Non-admin cannot INSERT into public.audit_log
+ok 20 - 20. review_photo admin function exists
+ok 21 - 21. Non-admin cannot call review_photo admin function
+ok 22 - 22. Discovery feed returns without error
+ok 23 - 23. Discovery feed never returns email or birth_date
+ok 24 - 24. Blocked members cannot send messages to each other
+ok 25 - 25. Banned user cannot send messages
+=== Supabase CLI test db ===
+Connecting to local database...
+Error response from daemon: toomanyrequests: Data limit exceeded
+Retrying after 4s: public.ecr.aws/supabase/pg_prove:3.36
+Error response from daemon: toomanyrequests: Data limit exceeded
+Retrying after 8s: public.ecr.aws/supabase/pg_prove:3.36
+Error response from daemon: toomanyrequests: Data limit exceeded
+3.36: Pulling from supabase/pg_prove
+dcccee43ad5d: Pulling fs layer
+06d62d0de6d7: Pulling fs layer
+a22cb17b3b93: Pulling fs layer
+4f4fb700ef54: Pulling fs layer
+4f4fb700ef54: Waiting
+a22cb17b3b93: Verifying Checksum
+a22cb17b3b93: Download complete
+dcccee43ad5d: Verifying Checksum
+dcccee43ad5d: Download complete
+06d62d0de6d7: Verifying Checksum
+06d62d0de6d7: Download complete
+dcccee43ad5d: Pull complete
+4f4fb700ef54: Verifying Checksum
+4f4fb700ef54: Download complete
+06d62d0de6d7: Pull complete
+a22cb17b3b93: Pull complete
+4f4fb700ef54: Pull complete
+Digest: sha256:eda7c5e68719e9c8287e78c017118407b48df904a51c935f5ab6098b8c0bc6bc
+Status: Downloaded newer image for ghcr.io/supabase/pg_prove:3.36
+ghcr.io/supabase/pg_prove:3.36
+psql:/home/runner/work/koodal-dating-app/koodal-dating-app/supabase/tests/database_security_and_admissions.sql:9: NOTICE:  extension "pgtap" already exists, skipping
+/home/runner/work/koodal-dating-app/koodal-dating-app/supabase/tests/database_security_and_admissions.sql .. ok
+psql:/home/runner/work/koodal-dating-app/koodal-dating-app/supabase/tests/phase3_security_and_discovery.sql:8: NOTICE:  extension "pgtap" already exists, skipping
+/home/runner/work/koodal-dating-app/koodal-dating-app/supabase/tests/phase3_security_and_discovery.sql ..... ok
+All tests successful.
+Files=2, Tests=39,  0 wallclock secs ( 0.03 usr  0.00 sys +  0.01 cusr  0.01 csys =  0.05 CPU)
+Result: PASS
