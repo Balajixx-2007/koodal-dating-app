@@ -7,13 +7,18 @@ import { ReportBlockModal } from '../components/ReportBlockModal';
 import { 
   Heart, X, Sparkles, MapPin, Briefcase, GraduationCap, 
   ChevronLeft, ChevronRight, ShieldAlert, Share2, 
-  RotateCcw, Eye, ShieldCheck 
+  RotateCcw, Eye, ShieldCheck, Loader2, WifiOff, RefreshCw 
 } from 'lucide-react';
 
 export const Discover: React.FC = () => {
   const { 
     t, 
     discoverableProfiles, 
+    isLoadingDiscovery,
+    discoveryError,
+    refreshDiscovery,
+    likeLimitNotice,
+    clearLikeLimitNotice,
     likeProfile, 
     passProfile, 
     activeIntentFilter, 
@@ -30,28 +35,31 @@ export const Discover: React.FC = () => {
 
   const handleNextPhoto = useCallback((e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    if (!currentProfile) return;
+    if (!currentProfile || !currentProfile.photos || currentProfile.photos.length === 0) return;
     setCurrentPhotoIdx(prev => (prev + 1) % currentProfile.photos.length);
   }, [currentProfile]);
 
   const handlePrevPhoto = useCallback((e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    if (!currentProfile) return;
+    if (!currentProfile || !currentProfile.photos || currentProfile.photos.length === 0) return;
     setCurrentPhotoIdx(prev => (prev - 1 + currentProfile.photos.length) % currentProfile.photos.length);
   }, [currentProfile]);
 
   // Handle Like with tactile feedback and duplicate tap prevention
-  const handleLike = useCallback(() => {
+  const handleLike = useCallback(async () => {
     if (!currentProfile || isLocked) return;
     setIsLocked(true);
     setActionState('like');
 
-    setTimeout(() => {
-      likeProfile(currentProfile);
+    try {
+      await likeProfile(currentProfile);
       setCurrentPhotoIdx(0);
       setActionState(null);
       setIsLocked(false);
-    }, 180);
+    } catch {
+      setActionState(null);
+      setIsLocked(false);
+    }
   }, [currentProfile, isLocked, likeProfile]);
 
   // Handle Pass with smooth slide feedback and duplicate tap prevention
@@ -71,7 +79,7 @@ export const Discover: React.FC = () => {
   // Keyboard navigation support
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (reportingProfile) return;
+      if (reportingProfile || likeLimitNotice) return;
       if (e.key === 'ArrowRight') {
         e.preventDefault();
         handleLike();
@@ -89,7 +97,7 @@ export const Discover: React.FC = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleLike, handlePass, handleNextPhoto, handlePrevPhoto, reportingProfile]);
+  }, [handleLike, handlePass, handleNextPhoto, handlePrevPhoto, reportingProfile, likeLimitNotice]);
 
   const intents: (RelationshipIntent | 'all')[] = ['all', 'casual', 'long_term', 'marriage', 'friendship'];
 
@@ -123,7 +131,35 @@ export const Discover: React.FC = () => {
         })}
       </div>
 
-      {currentProfile ? (
+      {/* Discovery Error / Offline Banner */}
+      {discoveryError && (
+        <div className="p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-300 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <WifiOff className="w-4 h-4 shrink-0 text-amber-600" />
+            <span className="font-medium">{discoveryError}</span>
+          </div>
+          <button
+            onClick={() => refreshDiscovery()}
+            className="px-2.5 py-1 rounded-lg bg-amber-200/60 dark:bg-amber-900/60 text-amber-900 dark:text-amber-200 text-[11px] font-bold flex items-center gap-1 shrink-0"
+          >
+            <RefreshCw className="w-3 h-3" />
+            <span>Retry</span>
+          </button>
+        </div>
+      )}
+
+      {/* Loading Skeleton */}
+      {isLoadingDiscovery && discoverableProfiles.length === 0 ? (
+        <div className="surface-card overflow-hidden animate-pulse space-y-4 p-4">
+          <div className="aspect-[3/4] bg-slate-200 dark:bg-slate-800 rounded-2xl"></div>
+          <div className="h-5 bg-slate-200 dark:bg-slate-800 rounded w-1/2"></div>
+          <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded w-3/4"></div>
+          <div className="flex gap-2">
+            <div className="h-8 bg-slate-200 dark:bg-slate-800 rounded-full w-20"></div>
+            <div className="h-8 bg-slate-200 dark:bg-slate-800 rounded-full w-24"></div>
+          </div>
+        </div>
+      ) : currentProfile ? (
         <div 
           className={`surface-card overflow-hidden transition-all duration-200 flex flex-col relative ${
             actionState === 'like' 
@@ -209,7 +245,7 @@ export const Discover: React.FC = () => {
             {/* Controlled Vignette for Text Contrast */}
             <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-slate-950/90 via-slate-950/40 to-transparent pointer-events-none"></div>
 
-            {/* Name, Age, Location Overlay */}
+            {/* Name, Age, Location Overlay (Same-city only: distance removed per spec) */}
             <div className="absolute bottom-4 left-4 right-4 text-white z-10 pointer-events-none">
               <div className="flex items-center gap-2">
                 <h3 className="font-heading text-2xl font-bold tracking-tight drop-shadow-sm">
@@ -226,8 +262,6 @@ export const Discover: React.FC = () => {
                   <MapPin className="w-3.5 h-3.5 text-[#F20D4E]" />
                   <span>{currentProfile.city}</span>
                 </span>
-                <span>&bull;</span>
-                <span>~{currentProfile.distanceKm} km away</span>
               </div>
             </div>
 
@@ -350,7 +384,7 @@ export const Discover: React.FC = () => {
               {t.no_more_profiles}
             </h3>
             <p className="text-xs text-[#667085] dark:text-slate-400 mt-1 max-w-sm mx-auto leading-relaxed">
-              We never populate feeds with bots or inactive accounts. As new verified members join in Chennai and campus clusters, they will appear here.
+              We never populate feeds with bots or inactive accounts. As new verified members join in your city and campus clusters, they will appear here.
             </p>
           </div>
 
@@ -384,6 +418,34 @@ export const Discover: React.FC = () => {
             <RotateCcw className="w-3.5 h-3.5" />
             <span>Reset Filters to All Intents</span>
           </button>
+        </div>
+      )}
+
+      {/* 20 Likes/Day Limit Modal */}
+      {likeLimitNotice && (
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="surface-card max-w-sm w-full p-6 text-center space-y-4 animate-card-entrance shadow-xl border border-[#F8B4C4]">
+            <div className="w-12 h-12 rounded-full bg-[#FFF0F3] text-[#F20D4E] flex items-center justify-center mx-auto">
+              <Sparkles className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="font-heading text-lg font-bold text-[#15182B] dark:text-white">
+                Daily Limit Reached
+              </h3>
+              <p className="text-xs text-[#667085] dark:text-slate-300 mt-1.5 leading-relaxed">
+                You've reached your daily limit of 20 likes. Koodal caps daily likes to cultivate authentic, intentional connections and prevent mindless swiping.
+              </p>
+            </div>
+            <p className="text-[11px] text-[#98A2B3]">
+              Your likes will refresh automatically in 24 hours.
+            </p>
+            <button
+              onClick={clearLikeLimitNotice}
+              className="w-full py-2.5 btn-primary-rose text-xs font-semibold"
+            >
+              Understood
+            </button>
+          </div>
         </div>
       )}
 
