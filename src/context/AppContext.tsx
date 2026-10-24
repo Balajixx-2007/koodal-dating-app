@@ -17,6 +17,7 @@ import { DiscoveryService } from '../lib/discovery-service';
 import { ChatService } from '../lib/chat-service';
 import { ModerationService } from '../lib/moderation-service';
 import { WaitlistService } from '../lib/waitlist-service';
+import { ProfileService } from '../lib/profile-service';
 
 interface AppContextType {
   language: Language;
@@ -33,8 +34,8 @@ interface AppContextType {
   // User & Profile
   currentUser: User | null;
   myProfile: Profile;
-  updateMyProfile: (updated: Partial<Profile>) => void;
-  deleteAccount: () => void;
+  updateMyProfile: (updated: Partial<Profile>) => Promise<void> | void;
+  deleteAccount: () => Promise<void> | void;
   
   // Discovery & Matching
   discoverableProfiles: Profile[];
@@ -495,13 +496,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const updateMyProfile = (updated: Partial<Profile>) => {
+  const updateMyProfile = async (updated: Partial<Profile>) => {
     setMyProfile(prev => ({ ...prev, ...updated }));
+    if (currentUser?.id) {
+      await ProfileService.updateProfile(currentUser.id, updated);
+    }
   };
 
   const deleteAccount = async () => {
     try {
-      await supabase.auth.signOut();
+      await ProfileService.deleteAccount();
     } catch {
       // ignore
     }

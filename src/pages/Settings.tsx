@@ -11,16 +11,27 @@ export const Settings: React.FC = () => {
   const [emailNotifs, setEmailNotifs] = useState(true);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState('');
+  const [isUpdating, setIsUpdating] = useState(false);
 
-  const handleTogglePause = () => {
+  const handleTogglePause = async () => {
     const nextState = !isPaused;
     setIsPaused(nextState);
-    updateMyProfile({ isPaused: nextState });
+    setIsUpdating(true);
+    try {
+      await updateMyProfile({ isPaused: nextState });
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (deleteConfirmation.toLowerCase() === 'delete') {
-      deleteAccount();
+      setIsUpdating(true);
+      try {
+        await deleteAccount();
+      } finally {
+        setIsUpdating(false);
+      }
     }
   };
 
