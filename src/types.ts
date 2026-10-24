@@ -79,6 +79,8 @@ export interface Message {
   body: string;
   sentAt: string;
   readAt?: string;
+  status?: 'sending' | 'sent' | 'failed';
+  error?: string;
 }
 
 export interface Report {
