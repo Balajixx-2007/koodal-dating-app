@@ -123,6 +123,10 @@ SELECT has_table('public', 'reports', '8. reports table exists');
 -- Test 9 - 11: Likes Enforcements & Mutual Matches (Rule 6)
 -- ==============================================================================
 -- 9: Member cannot delete like
+SET LOCAL ROLE authenticated;
+SET LOCAL "request.jwt.claim.sub" TO '11111111-1111-1111-1111-111111111111';
+SET LOCAL "request.jwt.claim.email" TO 'member_a@example.com';
+
 PREPARE test_delete_like AS
     DELETE FROM public.likes WHERE from_user = '11111111-1111-1111-1111-111111111111';
 
@@ -133,11 +137,17 @@ SELECT throws_ok(
     '9. Members cannot delete likes'
 );
 
--- 10: 21st like in rolling 24 hours throws daily limit exception
+-- Seed Member A -> Member B valid like (#1)
+RESET ROLE;
+INSERT INTO public.likes (from_user, to_user, created_at)
+VALUES ('11111111-1111-1111-1111-111111111111', '22222222-2222-2222-2222-222222222222', NOW() - INTERVAL '1 hour')
+ON CONFLICT DO NOTHING;
+
+-- Seed Member A 19 more likes (#2 through #20)
 DO $$
 DECLARE i INT; target_uuid UUID;
 BEGIN
-    FOR i IN 1..20 LOOP
+    FOR i IN 1..19 LOOP
         target_uuid := ('aaaaaaaa-0000-0000-0000-' || LPAD(i::text, 12, '0'))::UUID;
         INSERT INTO auth.users (id, email) VALUES (target_uuid, 'target_' || i || '@example.com') ON CONFLICT DO NOTHING;
         INSERT INTO public.users (id, email) VALUES (target_uuid, 'target_' || i || '@example.com') ON CONFLICT DO NOTHING;
@@ -147,9 +157,10 @@ BEGIN
     END LOOP;
 END $$;
 
+-- 10: 21st like in rolling 24 hours throws daily limit exception
 PREPARE test_21st_like AS
     INSERT INTO public.likes (from_user, to_user)
-    VALUES ('11111111-1111-1111-1111-111111111111', '22222222-2222-2222-2222-222222222222');
+    VALUES ('11111111-1111-1111-1111-111111111111', 'aaaaaaaa-0000-0000-0000-000000000020');
 
 SELECT throws_ok(
     'test_21st_like',
@@ -158,7 +169,7 @@ SELECT throws_ok(
     '10. 21st like in rolling 24h throws daily limit exception'
 );
 
--- 11: Mutual like creates exactly one match
+-- 11: Mutual like creates exactly one match (Member B likes Member A)
 INSERT INTO public.likes (from_user, to_user)
 VALUES ('22222222-2222-2222-2222-222222222222', '11111111-1111-1111-1111-111111111111')
 ON CONFLICT DO NOTHING;

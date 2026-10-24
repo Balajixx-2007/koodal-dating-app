@@ -95,6 +95,7 @@ BEGIN
 END $$;
 
 -- 6. Lock down direct SELECT on profiles and users (Members can only select own row)
+DROP POLICY IF EXISTS "Members view active unpaused profiles" ON public.profiles;
 DROP POLICY IF EXISTS "Users can view active profiles" ON public.profiles;
 DROP POLICY IF EXISTS "Profiles self select only" ON public.profiles;
 CREATE POLICY "Profiles self select only" ON public.profiles
@@ -236,7 +237,7 @@ $$;
 DROP TRIGGER IF EXISTS trg_prevent_like_delete ON public.likes;
 CREATE TRIGGER trg_prevent_like_delete
 BEFORE DELETE ON public.likes
-FOR EACH ROW EXECUTE FUNCTION public.prevent_like_deletion();
+FOR EACH STATEMENT EXECUTE FUNCTION public.prevent_like_deletion();
 
 CREATE OR REPLACE FUNCTION public.enforce_daily_like_limit()
 RETURNS TRIGGER
