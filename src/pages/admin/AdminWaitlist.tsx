@@ -45,9 +45,16 @@ export const AdminWaitlist: React.FC = () => {
     .filter(w => w.lane === 'men' && w.city.toLowerCase().includes(selectedCity.toLowerCase()) && w.status === 'waiting')
     .sort((a, b) => b.score - a.score);
 
-  const handleExecuteBatch = () => {
-    const result = runBatchAdmission(selectedCity, womenToAdmit, computedMenToAdmit);
-    setLastBatchResult(result);
+  const [isExecuting, setIsExecuting] = useState(false);
+
+  const handleExecuteBatch = async () => {
+    setIsExecuting(true);
+    try {
+      const result = await runBatchAdmission(selectedCity, womenToAdmit, computedMenToAdmit);
+      setLastBatchResult(result);
+    } finally {
+      setIsExecuting(false);
+    }
   };
 
   return (

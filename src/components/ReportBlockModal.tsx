@@ -14,6 +14,7 @@ export const ReportBlockModal: React.FC<ReportBlockModalProps> = ({ targetProfil
   const [details, setDetails] = useState('');
   const [alsoBlock, setAlsoBlock] = useState(true);
   const [submitted, setSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
@@ -23,19 +24,25 @@ export const ReportBlockModal: React.FC<ReportBlockModalProps> = ({ targetProfil
     return () => window.removeEventListener('keydown', handleEsc);
   }, [onClose]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    submitReport(
-      targetProfile.userId,
-      targetProfile.name,
-      targetProfile.photos[0],
-      reason,
-      details || 'Submitted via standard report flow.'
-    );
-    if (alsoBlock) {
-      blockUser(targetProfile.userId);
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      await submitReport(
+        targetProfile.userId,
+        targetProfile.name,
+        targetProfile.photos[0],
+        reason,
+        details || 'Submitted via standard report flow.'
+      );
+      if (alsoBlock) {
+        await blockUser(targetProfile.userId);
+      }
+      setSubmitted(true);
+    } finally {
+      setIsSubmitting(false);
     }
-    setSubmitted(true);
   };
 
   return (
