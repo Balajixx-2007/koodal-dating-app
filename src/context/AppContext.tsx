@@ -14,7 +14,7 @@ import confetti from 'canvas-confetti';
 import { supabase } from '../lib/supabase';
 import { resolveUserRole } from '../lib/auth-service';
 import { DiscoveryService } from '../lib/discovery-service';
-import { ChatService } from '../lib/chat-service';
+import { ChatService, FetchMessagesOptions } from '../lib/chat-service';
 import { ModerationService } from '../lib/moderation-service';
 import { WaitlistService } from '../lib/waitlist-service';
 import { ProfileService } from '../lib/profile-service';
@@ -54,11 +54,13 @@ interface AppContextType {
   // Matches & Chat
   matches: Match[];
   messages: Record<string, Message[]>;
+  setMessages: React.Dispatch<React.SetStateAction<Record<string, Message[]>>>;
   sendMessage: (matchId: string, body: string) => Promise<boolean> | void;
+  retrySendMessage: (matchId: string, failedMessageId: string) => Promise<boolean>;
   isLoadingMatches: boolean;
   matchesError: string | null;
   refreshMatches: () => Promise<void>;
-  fetchMessagesForMatch: (matchId: string) => Promise<void>;
+  fetchMessagesForMatch: (matchId: string, options?: FetchMessagesOptions) => Promise<{ success: boolean; hasMore?: boolean }>;
   markMatchAsRead: (matchId: string) => Promise<void>;
   
   // Safety & Moderation
@@ -372,9 +374,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : INITIAL_MESSAGES;
   });
 
-  const fetchMessagesForMatch = useCallback(async (matchId: string) => {
-    if (!matchId) return;
-    const res = await ChatService.fetchMessages(matchId);
+  const fetchMessagesForMatch = useCallback(async (matchId: string, options?: FetchMessagesOptions) => {
+    if (!matchId) return { success: false, hasMore: false };
+    const res = await ChatService.fetchMessages(matchId, undefined, options);
     if (res.success) {
       const mapped: Message[] = res.messages.map(m => ({
         id: m.id,
@@ -382,13 +384,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         senderId: m.sender_id,
         body: m.body,
         sentAt: m.sent_at,
-        readAt: m.read_at || undefined
+        readAt: m.read_at || undefined,
+        status: 'sent'
       }));
-      setMessages(prev => ({
-        ...prev,
-        [matchId]: mapped
-      }));
+      setMessages(prev => {
+        const existing = prev[matchId] || [];
+        if (options?.offset && options.offset > 0) {
+          const existingIds = new Set(existing.map(m => m.id));
+          const newOlder = mapped.filter(m => !existingIds.has(m.id));
+          return {
+            ...prev,
+            [matchId]: [...newOlder, ...existing]
+          };
+        } else {
+          const idMap = new Map<string, Message>();
+          mapped.forEach(m => idMap.set(m.id, m));
+          existing.forEach(m => {
+            if (m.status === 'sending' || m.status === 'failed') {
+              idMap.set(m.id, m);
+            } else if (!idMap.has(m.id)) {
+              idMap.set(m.id, m);
+            }
+          });
+          const sorted = Array.from(idMap.values()).sort(
+            (a, b) => new Date(a.sentAt).getTime() - new Date(b.sentAt).getTime()
+          );
+          return {
+            ...prev,
+            [matchId]: sorted
+          };
+        }
+      });
+      return { success: true, hasMore: res.hasMore };
     }
+    return { success: false, hasMore: false };
   }, []);
 
   const markMatchAsRead = useCallback(async (matchId: string) => {
@@ -597,107 +626,139 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!body.trim()) return false;
     const trimmed = body.trim();
     const senderId = currentUser?.id;
+    const tempId = `temp_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+
+    // Optimistically insert message into UI thread immediately with sending status
+    const optimisticMsg: Message = {
+      id: tempId,
+      matchId,
+      senderId: senderId || 'usr_me_01',
+      body: trimmed,
+      sentAt: new Date().toISOString(),
+      status: 'sending'
+    };
+
+    setMessages(prev => ({
+      ...prev,
+      [matchId]: [...(prev[matchId] || []), optimisticMsg]
+    }));
+
+    setMatches(prev => prev.map(m => {
+      if (m.id === matchId) {
+        return {
+          ...m,
+          lastMessage: trimmed,
+          lastMessageTime: 'Just now'
+        };
+      }
+      return m;
+    }));
 
     if (senderId) {
       const res = await ChatService.sendMessage(matchId, senderId, trimmed);
       if (res.success && res.message) {
-        const newMsg: Message = {
+        const confirmedMsg: Message = {
           id: res.message.id,
           matchId: res.message.match_id,
           senderId: res.message.sender_id,
           body: res.message.body,
           sentAt: res.message.sent_at,
-          readAt: res.message.read_at || undefined
+          readAt: res.message.read_at || undefined,
+          status: 'sent'
         };
 
         setMessages(prev => {
           const list = prev[matchId] || [];
-          if (list.some(m => m.id === newMsg.id)) return prev;
           return {
             ...prev,
-            [matchId]: [...list, newMsg]
+            [matchId]: list.map(m => (m.id === tempId ? confirmedMsg : m))
           };
         });
 
-        setMatches(prev => prev.map(m => {
-          if (m.id === matchId) {
-            return {
-              ...m,
-              lastMessage: trimmed,
-              lastMessageTime: 'Just now'
-            };
-          }
-          return m;
-        }));
-
         return true;
       } else {
+        setMessages(prev => {
+          const list = prev[matchId] || [];
+          return {
+            ...prev,
+            [matchId]: list.map(m =>
+              m.id === tempId
+                ? { ...m, status: 'failed', error: res.error || 'Failed to send' }
+                : m
+            )
+          };
+        });
         return false;
       }
     } else {
-      const newMsg: Message = {
-        id: `msg_${Date.now()}`,
-        matchId,
-        senderId: 'usr_me_01',
-        body: trimmed,
-        sentAt: new Date().toISOString()
-      };
-
-      setMessages(prev => ({
-        ...prev,
-        [matchId]: [...(prev[matchId] || []), newMsg]
-      }));
-
-      setMatches(prev => prev.map(m => {
-        if (m.id === matchId) {
-          return {
-            ...m,
-            lastMessage: trimmed,
-            lastMessageTime: 'Just now'
-          };
-        }
-        return m;
-      }));
-
-      // Automated thoughtful reply simulation after 2.5s for realism in guest preview mode!
       setTimeout(() => {
-        const match = matches.find(m => m.id === matchId);
-        if (match) {
-          const replyResponses = [
-            `That really resonates with me! I feel the exact same way.`,
-            `Haha, that's such a great answer. What else do you like doing around ${match.matchedProfile.city}?`,
-            `I love that you mentioned this. It's so rare to find someone who is so upfront about what they want!`,
-            `Totally agree! Would love to know more about your favorite spots in Chennai.`
-          ];
-          const randomReply = replyResponses[Math.floor(Math.random() * replyResponses.length)];
-          
-          const incomingMsg: Message = {
-            id: `msg_in_${Date.now()}`,
-            matchId,
-            senderId: match.matchedProfile.userId,
-            body: randomReply,
-            sentAt: new Date().toISOString()
-          };
-
-          setMessages(prev => ({
+        setMessages(prev => {
+          const list = prev[matchId] || [];
+          return {
             ...prev,
-            [matchId]: [...(prev[matchId] || []), incomingMsg]
-          }));
+            [matchId]: list.map(m => (m.id === tempId ? { ...m, status: 'sent' } : m))
+          };
+        });
+      }, 300);
 
-          setMatches(prev => prev.map(m => {
-            if (m.id === matchId) {
-              return {
-                ...m,
-                lastMessage: randomReply,
-                lastMessageTime: 'Just now',
-                unreadCount: (m.unreadCount || 0) + 1
-              };
-            }
-            return m;
-          }));
-        }
-      }, 2200);
+      return true;
+    }
+  };
 
+  const retrySendMessage = async (matchId: string, failedMessageId: string): Promise<boolean> => {
+    const list = messages[matchId] || [];
+    const failedMsg = list.find(m => m.id === failedMessageId);
+    if (!failedMsg) return false;
+
+    // Reset status to sending
+    setMessages(prev => ({
+      ...prev,
+      [matchId]: (prev[matchId] || []).map(m =>
+        m.id === failedMessageId ? { ...m, status: 'sending', error: undefined } : m
+      )
+    }));
+
+    const senderId = currentUser?.id;
+    if (senderId) {
+      const res = await ChatService.sendMessage(matchId, senderId, failedMsg.body);
+      if (res.success && res.message) {
+        const confirmedMsg: Message = {
+          id: res.message.id,
+          matchId: res.message.match_id,
+          senderId: res.message.sender_id,
+          body: res.message.body,
+          sentAt: res.message.sent_at,
+          readAt: res.message.read_at || undefined,
+          status: 'sent'
+        };
+
+        setMessages(prev => ({
+          ...prev,
+          [matchId]: (prev[matchId] || []).map(m =>
+            m.id === failedMessageId ? confirmedMsg : m
+          )
+        }));
+        return true;
+      } else {
+        setMessages(prev => ({
+          ...prev,
+          [matchId]: (prev[matchId] || []).map(m =>
+            m.id === failedMessageId
+              ? { ...m, status: 'failed', error: res.error || 'Failed to send' }
+              : m
+          )
+        }));
+        return false;
+      }
+    } else {
+      setTimeout(() => {
+        setMessages(prev => ({
+          ...prev,
+          [matchId]: (prev[matchId] || []).map(m =>
+            m.id === failedMessageId ? { ...m, status: 'sent' } : m
+          )
+        }));
+      }, 300);
       return true;
     }
   };
@@ -1018,7 +1079,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setMatchMoment,
         matches,
         messages,
+        setMessages,
         sendMessage,
+        retrySendMessage,
         isLoadingMatches,
         matchesError,
         refreshMatches,

@@ -25,6 +25,17 @@ export interface MessageItem {
   read_at: string | null;
 }
 
+export interface FetchMessagesOptions {
+  limit?: number;
+  offset?: number;
+  beforeSentAt?: string;
+}
+
+export interface SubscribeMessagesOptions {
+  onMessageUpdated?: (msg: MessageItem) => void;
+  onStatusChange?: (status: 'connected' | 'error' | 'disconnected') => void;
+}
+
 export class ChatService {
   /**
    * Fetches active matches for the authenticated caller via the SECURITY DEFINER RPC.
@@ -72,15 +83,18 @@ export class ChatService {
   }
 
   /**
-   * Fetches all messages for a given match, ordered chronologically by sent_at ASC.
+   * Fetches messages for a given match, ordered chronologically by sent_at ASC.
+   * Supports pagination options: limit, offset, and beforeSentAt.
    * Note: The database column is strictly `sent_at` (NOT `created_at`).
    */
   static async fetchMessages(
     matchId: string,
-    client: SupabaseClient<Database> = supabase
+    client: SupabaseClient<Database> = supabase,
+    options?: FetchMessagesOptions
   ): Promise<{
     success: boolean;
     messages: MessageItem[];
+    hasMore?: boolean;
     offline?: boolean;
     error?: string;
   }> {
@@ -102,11 +116,23 @@ export class ChatService {
     }
 
     try {
-      const { data, error } = await client
+      let query: any = client
         .from('messages')
         .select('*')
-        .eq('match_id', matchId.trim())
-        .order('sent_at', { ascending: true });
+        .eq('match_id', matchId.trim());
+
+      if (options?.beforeSentAt) {
+        query = query.lt('sent_at', options.beforeSentAt);
+      }
+
+      query = query.order('sent_at', { ascending: true });
+
+      if (options?.limit !== undefined) {
+        const offset = options.offset || 0;
+        query = query.range(offset, offset + options.limit - 1);
+      }
+
+      const { data, error } = await query;
 
       if (error) {
         return {
@@ -116,9 +142,11 @@ export class ChatService {
         };
       }
 
+      const msgs = (data || []) as MessageItem[];
       return {
         success: true,
-        messages: (data || []) as MessageItem[]
+        messages: msgs,
+        hasMore: options?.limit !== undefined ? msgs.length >= options.limit : false
       };
     } catch (err: any) {
       return {
@@ -256,15 +284,17 @@ export class ChatService {
   }
 
   /**
-   * Subscribes to new messages inserted for a given match via Supabase Realtime channel.
+   * Subscribes to realtime messages (INSERT and UPDATE for read receipts) for a given match.
+   * Cleans up channel cleanly on unsubscribe.
    */
   static subscribeToMessages(
     matchId: string,
     onNewMessage: (msg: MessageItem) => void,
-    client: SupabaseClient<Database> = supabase
+    client: SupabaseClient<Database> = supabase,
+    options?: SubscribeMessagesOptions
   ) {
     const channelName = `messages:${matchId}`;
-    const channel = client
+    let activeChannel = client
       .channel(channelName)
       .on(
         'postgres_changes',
@@ -279,9 +309,58 @@ export class ChatService {
             onNewMessage(payload.new as MessageItem);
           }
         }
-      )
-      .subscribe();
+      );
 
-    return channel;
+    if (options?.onMessageUpdated) {
+      activeChannel = activeChannel.on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'messages',
+          filter: `match_id=eq.${matchId}`
+        },
+        (payload: any) => {
+          if (payload?.new && options.onMessageUpdated) {
+            options.onMessageUpdated(payload.new as MessageItem);
+          }
+        }
+      );
+    }
+
+    const subscription = activeChannel.subscribe((status: string) => {
+      if (options?.onStatusChange) {
+        if (status === 'SUBSCRIBED') {
+          options.onStatusChange('connected');
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          options.onStatusChange('error');
+        } else if (status === 'CLOSED') {
+          options.onStatusChange('disconnected');
+        }
+      }
+    });
+
+    return {
+      channel: activeChannel,
+      unsubscribe: async () => {
+        try {
+          if (typeof subscription?.unsubscribe === 'function') {
+            subscription.unsubscribe();
+          } else if (typeof activeChannel?.unsubscribe === 'function') {
+            activeChannel.unsubscribe();
+          }
+        } catch {
+          // ignore
+        }
+
+        try {
+          if (typeof client?.removeChannel === 'function') {
+            await client.removeChannel(activeChannel);
+          }
+        } catch {
+          // ignore
+        }
+      }
+    };
   }
 }

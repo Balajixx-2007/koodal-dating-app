@@ -4,9 +4,11 @@ import { IntentBadge } from '../components/IntentBadge';
 import { VerifiedBadge } from '../components/VerifiedBadge';
 import { ReportBlockModal } from '../components/ReportBlockModal';
 import { 
-  ArrowLeft, Send, ShieldAlert, Sparkles, UserRound, Heart, AlertCircle 
+  ArrowLeft, Send, ShieldAlert, Sparkles, UserRound, Heart, AlertCircle,
+  Check, CheckCheck, Clock, RotateCw, Wifi, WifiOff 
 } from 'lucide-react';
 import { ChatService } from '../lib/chat-service';
+import type { Message } from '../types';
 
 interface ChatProps {
   matchId?: string;
@@ -17,7 +19,9 @@ export const Chat: React.FC<ChatProps> = ({ matchId }) => {
     viewParam, 
     matches, 
     messages, 
+    setMessages,
     sendMessage, 
+    retrySendMessage,
     currentUser, 
     currentView,
     navigateTo,
@@ -31,6 +35,9 @@ export const Chat: React.FC<ChatProps> = ({ matchId }) => {
   const [showDateIdeas, setShowDateIdeas] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [isLoadingEarlier, setIsLoadingEarlier] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<'connected' | 'connecting' | 'error' | 'disconnected'>('connecting');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const activeMatchId = matchId || viewParam || (currentView.startsWith('/chat/') ? currentView.replace('/chat/', '') : undefined) || matches[0]?.id;
@@ -48,22 +55,105 @@ export const Chat: React.FC<ChatProps> = ({ matchId }) => {
   useEffect(() => {
     if (!activeMatchId) return;
 
-    fetchMessagesForMatch(activeMatchId);
-    markMatchAsRead(activeMatchId);
-
-    const channel = ChatService.subscribeToMessages(activeMatchId, (newMsg) => {
-      fetchMessagesForMatch(activeMatchId);
-      if (currentUser?.id && newMsg.sender_id !== currentUser.id) {
-        markMatchAsRead(activeMatchId);
+    // Load initial batch of messages (up to 25)
+    fetchMessagesForMatch(activeMatchId, { limit: 25 }).then(res => {
+      if (res && typeof res.hasMore === 'boolean') {
+        setHasMore(res.hasMore);
       }
     });
+    markMatchAsRead(activeMatchId);
 
+    // Subscribe to realtime channel (INSERT for incoming, UPDATE for read receipts)
+    const subscription = ChatService.subscribeToMessages(
+      activeMatchId,
+      (newMsg) => {
+        // Partner sent a new message via INSERT
+        setMessages(prev => {
+          const list = prev[activeMatchId] || [];
+          if (list.some(m => m.id === newMsg.id)) return prev;
+          const mapped: Message = {
+            id: newMsg.id,
+            matchId: newMsg.match_id,
+            senderId: newMsg.sender_id,
+            body: newMsg.body,
+            sentAt: newMsg.sent_at,
+            readAt: newMsg.read_at || undefined,
+            status: 'sent'
+          };
+          return {
+            ...prev,
+            [activeMatchId]: [...list, mapped]
+          };
+        });
+
+        // Automatically mark as read if message is from the other person
+        if (currentUser?.id && newMsg.sender_id !== currentUser.id) {
+          markMatchAsRead(activeMatchId);
+        }
+      },
+      undefined,
+      {
+        onMessageUpdated: (updatedMsg) => {
+          // Partner marked our message read via UPDATE (sets read_at)
+          setMessages(prev => {
+            const list = prev[activeMatchId] || [];
+            return {
+              ...prev,
+              [activeMatchId]: list.map(m =>
+                m.id === updatedMsg.id
+                  ? { ...m, readAt: updatedMsg.read_at || m.readAt }
+                  : m
+              )
+            };
+          });
+        },
+        onStatusChange: (status) => {
+          setConnectionStatus(status);
+        }
+      }
+    );
+
+    // Reconnection listener when device regains network
+    const handleOnline = () => {
+      setConnectionStatus('connected');
+      fetchMessagesForMatch(activeMatchId, { limit: 25 });
+      markMatchAsRead(activeMatchId);
+    };
+
+    const handleOffline = () => {
+      setConnectionStatus('disconnected');
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    // Cleanup on unmount or active match change
     return () => {
-      if (channel && typeof channel.unsubscribe === 'function') {
-        channel.unsubscribe();
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      if (subscription && typeof subscription.unsubscribe === 'function') {
+        subscription.unsubscribe();
       }
     };
-  }, [activeMatchId, fetchMessagesForMatch, markMatchAsRead, currentUser?.id]);
+  }, [activeMatchId, fetchMessagesForMatch, markMatchAsRead, currentUser?.id, setMessages]);
+
+  const handleLoadEarlier = async () => {
+    if (!activeMatchId || isLoadingEarlier || !hasMore) return;
+    setIsLoadingEarlier(true);
+    try {
+      const oldestMessage = currentMessages[0];
+      const res = await fetchMessagesForMatch(activeMatchId, {
+        limit: 25,
+        offset: currentMessages.length,
+        beforeSentAt: oldestMessage?.sentAt
+      });
+      if (res) {
+        setHasMore(Boolean(res.hasMore));
+      }
+    } finally {
+      setIsLoadingEarlier(false);
+    }
+  };
 
   const toggleMessageLike = (msgId: string) => {
     setLikedMessageIds(prev =>
@@ -73,7 +163,7 @@ export const Chat: React.FC<ChatProps> = ({ matchId }) => {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [currentMessages]);
+  }, [currentMessages.length]);
 
   if (!match) {
     return (
@@ -96,12 +186,11 @@ export const Chat: React.FC<ChatProps> = ({ matchId }) => {
 
     setSendError(null);
     setIsSending(true);
+    setInputBody('');
     try {
       const success = await sendMessage(match.id, trimmed);
       if (success === false) {
-        setSendError('Unable to send message. Please verify your connection.');
-      } else {
-        setInputBody('');
+        setSendError('Unable to deliver message right now. You can retry tapping the retry icon.');
       }
     } catch {
       setSendError('An unexpected error occurred while sending your message.');
@@ -115,7 +204,7 @@ export const Chat: React.FC<ChatProps> = ({ matchId }) => {
     try {
       const success = await sendMessage(match.id, promptText);
       if (success === false) {
-        setSendError('Unable to send message. Please verify your connection.');
+        setSendError('Unable to deliver message right now. You can retry tapping the retry icon.');
       }
     } catch {
       setSendError('An unexpected error occurred while sending your message.');
@@ -166,8 +255,27 @@ export const Chat: React.FC<ChatProps> = ({ matchId }) => {
               </h3>
               <VerifiedBadge size="sm" showLabel={false} />
             </div>
-            <div className="flex items-center gap-1.5 mt-0.5">
+            <div className="flex items-center gap-2 mt-0.5">
               <IntentBadge intent={partner.intent} size="sm" />
+              {/* Realtime Status Indicator */}
+              <div className="flex items-center gap-1 text-[10px]">
+                {connectionStatus === 'connected' ? (
+                  <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    Live
+                  </span>
+                ) : connectionStatus === 'disconnected' ? (
+                  <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400 font-medium">
+                    <WifiOff className="w-3 h-3" />
+                    Offline
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1 text-slate-400 font-medium">
+                    <Wifi className="w-3 h-3 animate-pulse" />
+                    Connecting...
+                  </span>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -209,9 +317,17 @@ export const Chat: React.FC<ChatProps> = ({ matchId }) => {
 
       {/* Error Banner */}
       {sendError && (
-        <div className="mb-2 p-2.5 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 flex items-center gap-2 text-xs text-red-700 dark:text-red-300 shrink-0">
-          <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
-          <span>{sendError}</span>
+        <div className="mb-2 p-2.5 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 flex items-center justify-between text-xs text-red-700 dark:text-red-300 shrink-0">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
+            <span>{sendError}</span>
+          </div>
+          <button
+            onClick={() => setSendError(null)}
+            className="text-[11px] font-semibold text-red-800 hover:underline shrink-0 ml-2"
+          >
+            Dismiss
+          </button>
         </div>
       )}
 
@@ -268,6 +384,20 @@ export const Chat: React.FC<ChatProps> = ({ matchId }) => {
 
       {/* Messages Thread Container */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3 surface-card mb-2 shadow-xs">
+        {/* Pagination: Load earlier messages button */}
+        {hasMore && (
+          <div className="flex justify-center pb-2">
+            <button
+              type="button"
+              onClick={handleLoadEarlier}
+              disabled={isLoadingEarlier}
+              className="text-xs px-3 py-1 rounded-full bg-[#FFF0F3] hover:bg-[#FCE4EC] text-[#D80B42] dark:bg-slate-800 dark:text-rose-400 font-medium transition-colors disabled:opacity-50"
+            >
+              {isLoadingEarlier ? 'Loading earlier messages...' : 'Load earlier messages'}
+            </button>
+          </div>
+        )}
+
         {currentMessages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center p-6 text-[#98A2B3] space-y-2">
             <div className="w-12 h-12 rounded-2xl bg-[#FFF0F3] text-[#F20D4E] flex items-center justify-center border border-[#F0E3E6] animate-romantic-heartbeat">
@@ -291,7 +421,9 @@ export const Chat: React.FC<ChatProps> = ({ matchId }) => {
                   <div
                     className={`max-w-[80vw] sm:max-w-md rounded-2xl px-3.5 py-2 text-xs sm:text-sm font-normal shadow-xs leading-relaxed ${
                       isMe
-                        ? 'bg-gradient-to-r from-[#F20D4E] to-[#D80B42] text-white rounded-br-xs'
+                        ? msg.status === 'failed'
+                          ? 'bg-red-50 dark:bg-red-950/40 border border-red-300 dark:border-red-800 text-red-900 dark:text-red-200 rounded-br-xs'
+                          : 'bg-gradient-to-r from-[#F20D4E] to-[#D80B42] text-white rounded-br-xs'
                         : 'bg-white dark:bg-slate-800 text-[#15182B] dark:text-white border border-[#F0E3E6] dark:border-slate-700 rounded-bl-xs'
                     }`}
                   >
@@ -316,9 +448,51 @@ export const Chat: React.FC<ChatProps> = ({ matchId }) => {
                   </button>
                 </div>
 
-                <span className="text-[10px] text-[#98A2B3] mt-1 px-1 font-medium">
-                  {timeStr}
-                </span>
+                {/* Timestamp, Delivery Status, Read Receipts & Retry */}
+                <div className="flex items-center gap-1 mt-1 px-1">
+                  <span className="text-[10px] text-[#98A2B3] font-medium">
+                    {timeStr}
+                  </span>
+
+                  {isMe && (
+                    <>
+                      {msg.status === 'sending' && (
+                        <span className="flex items-center gap-0.5 text-[#98A2B3]" title="Sending...">
+                          <Clock className="w-3 h-3 animate-pulse" />
+                        </span>
+                      )}
+
+                      {msg.status === 'failed' && (
+                        <div className="flex items-center gap-1 text-red-600">
+                          <span className="text-[10px] font-semibold">Failed</span>
+                          {retrySendMessage && (
+                            <button
+                              type="button"
+                              onClick={() => retrySendMessage(match.id, msg.id)}
+                              className="p-0.5 rounded hover:bg-red-100 dark:hover:bg-red-950/40 text-red-600 transition-colors"
+                              title="Retry sending"
+                              aria-label="Retry sending message"
+                            >
+                              <RotateCw className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      {(msg.status === 'sent' || (!msg.status && !msg.id.startsWith('temp_'))) && (
+                        msg.readAt ? (
+                          <span title={`Read ${new Date(msg.readAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}>
+                            <CheckCheck className="w-3.5 h-3.5 text-[#F20D4E]" />
+                          </span>
+                        ) : (
+                          <span title="Delivered">
+                            <Check className="w-3 h-3 text-[#98A2B3]" />
+                          </span>
+                        )
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
             );
           })
@@ -357,3 +531,4 @@ export const Chat: React.FC<ChatProps> = ({ matchId }) => {
     </div>
   );
 };
+
